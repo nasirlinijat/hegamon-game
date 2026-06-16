@@ -1,15 +1,15 @@
 import { TERRITORIES, type TerritoryId } from '../engine/map';
 import type { GameState } from '../engine/state';
 import { PLAYER_COLORS } from './App';
-import { blend, darken, lighten } from './colors';
+import { darken, lighten } from './colors';
 import {
   BRIDGES,
-  CONTINENT_TINT,
   MAP_H,
   MAP_W,
   TERRITORY_CENTROID,
   TERRITORY_SHAPES,
   WRAP_STUBS,
+  smoothClosedPath,
 } from './territory-shapes';
 
 interface Props {
@@ -22,9 +22,7 @@ interface Props {
   onHover: (id: TerritoryId | null) => void;
 }
 
-function pointsAttr(id: TerritoryId): string {
-  return TERRITORY_SHAPES[id].map(([x, y]) => `${x},${y}`).join(' ');
-}
+const NEUTRAL_COLOR = '#5a6272';
 
 export function Board({
   state, selected, validTargets, hoverTargets, hovered, onTerritoryClick, onHover,
@@ -32,114 +30,143 @@ export function Board({
   const ids = Object.keys(TERRITORY_SHAPES) as TerritoryId[];
 
   return (
-    <svg viewBox={`0 0 ${MAP_W} ${MAP_H}`} style={{ width: '100%', height: '100%', display: 'block' }}>
+    <svg
+      viewBox={`0 0 ${MAP_W} ${MAP_H}`}
+      style={{ width: '100%', height: '100%', display: 'block' }}
+    >
       <defs>
-        <radialGradient id="ocean" cx="50%" cy="42%" r="75%">
-          <stop offset="0%" stopColor="#15314f" />
-          <stop offset="100%" stopColor="#0a1a2c" />
+        {/* Ocean background gradient */}
+        <radialGradient id="ocean-grad" cx="50%" cy="44%" r="78%">
+          <stop offset="0%"   stopColor="#1b3a58" />
+          <stop offset="100%" stopColor="#091524" />
         </radialGradient>
+
+        {/* Subtle graticule dot-grid pattern for ocean texture */}
+        <pattern id="graticule" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+          <circle cx="16" cy="16" r="0.9" fill="#ffffff" opacity="0.06" />
+        </pattern>
+
+        {/* Glow filter for selected territory */}
+        <filter id="glow-sel" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <filter id="glow-target" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
       </defs>
 
       <style>{`
-        @keyframes dash { to { stroke-dashoffset: -16; } }
-        .target-pulse { animation: dash 0.8s linear infinite; }
+        @keyframes dashMove { to { stroke-dashoffset: -16; } }
+        .target-dash { animation: dashMove 0.7s linear infinite; }
       `}</style>
 
-      <rect width={MAP_W} height={MAP_H} fill="url(#ocean)" />
+      {/* Ocean */}
+      <rect width={MAP_W} height={MAP_H} fill="url(#ocean-grad)" />
+      <rect width={MAP_W} height={MAP_H} fill="url(#graticule)" />
 
-      {/* Sea bridges (dashed connectors) */}
+      {/* Sea bridges */}
       {BRIDGES.map(([a, b]) => {
         const pa = TERRITORY_CENTROID[a];
         const pb = TERRITORY_CENTROID[b];
         return (
           <line
-            key={`${a}-${b}`}
+            key={`br-${a}-${b}`}
             x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
-            stroke="#3a5573" strokeWidth={1.4} strokeDasharray="5 5" opacity={0.7}
+            stroke="#4a7ca8" strokeWidth={1} strokeDasharray="4 5" opacity={0.55}
           />
         );
       })}
+
+      {/* Wrap stubs (Alaska ↔ Kamchatka dateline) */}
       {WRAP_STUBS.map((s) => {
         const p = TERRITORY_CENTROID[s.from];
         return (
           <g key={s.from}>
             <line
               x1={p.x} y1={p.y} x2={s.toEdge} y2={p.y}
-              stroke="#3a5573" strokeWidth={1.4} strokeDasharray="5 5" opacity={0.7}
+              stroke="#4a7ca8" strokeWidth={1} strokeDasharray="4 5" opacity={0.55}
             />
             <text
-              x={s.toEdge < MAP_W / 2 ? s.toEdge + 8 : s.toEdge - 8} y={p.y + 4}
-              fill="#54708e" fontSize={14} textAnchor={s.toEdge < MAP_W / 2 ? 'start' : 'end'}
-            >
-              {s.label}
-            </text>
+              x={s.toEdge < MAP_W / 2 ? s.toEdge + 6 : s.toEdge - 6}
+              y={p.y + 4}
+              fill="#5a8ab8" fontSize={12} textAnchor={s.toEdge < MAP_W / 2 ? 'start' : 'end'}
+            >{s.label}</text>
           </g>
         );
       })}
 
-      {/* Territories */}
+      {/* Territory fills */}
       {ids.map((id) => {
-        const continent = TERRITORIES[id].continent;
-        const tint = CONTINENT_TINT[continent];
         const owner = state.owner[id];
-        const ownerColor = PLAYER_COLORS[owner] ?? '#888';
+        const ownerColor = PLAYER_COLORS[owner] ?? NEUTRAL_COLOR;
 
-        const isSelected = id === selected;
-        const isTarget = validTargets.has(id);
+        const isSelected    = id === selected;
+        const isTarget      = validTargets.has(id);
         const isHoverTarget = hoverTargets.has(id);
-        const isHovered = id === hovered;
+        const isHovered     = id === hovered;
 
-        // Fill: continent tint with a slight nudge toward the owner color for legibility.
-        let fill = blend(tint, ownerColor, 0.16);
-        if (isHovered) fill = lighten(fill, 0.12);
-        if (isSelected) fill = lighten(fill, 0.18);
+        let fill = ownerColor;
+        if (isHovered || isHoverTarget) fill = lighten(fill, 0.18);
+        if (isSelected) fill = lighten(fill, 0.22);
 
-        // Border conveys ownership; selection/target override with brighter strokes.
-        let stroke = darken(ownerColor, 0.15);
-        let strokeWidth = 2.2;
+        let stroke = darken(ownerColor, 0.35);
+        let strokeWidth = 1.2;
         let dash: string | undefined;
         let pulse = false;
-        if (isSelected) { stroke = '#ffd23f'; strokeWidth = 3.6; }
-        else if (isTarget) { stroke = '#ff7a1a'; strokeWidth = 3; dash = '6 4'; pulse = true; }
-        else if (isHoverTarget) { stroke = '#ff9a4a'; strokeWidth = 2.4; dash = '4 4'; }
+        let filter: string | undefined;
 
+        if (isSelected)       { stroke = '#ffd23f'; strokeWidth = 2.8; filter = 'url(#glow-sel)'; }
+        else if (isTarget)    { stroke = '#ff8c1a'; strokeWidth = 2.4; dash = '7 4'; pulse = true; filter = 'url(#glow-target)'; }
+        else if (isHoverTarget){ stroke = '#ffb060'; strokeWidth = 1.8; dash = '5 4'; }
+
+        const d = smoothClosedPath(TERRITORY_SHAPES[id]);
         return (
-          <polygon
+          <path
             key={id}
-            points={pointsAttr(id)}
+            d={d}
             fill={fill}
             stroke={stroke}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
-            {...(dash ? { strokeDasharray: dash } : {})}
-            className={pulse ? 'target-pulse' : undefined}
-            style={{ cursor: 'pointer', transition: 'fill .12s' }}
+            {...(dash   ? { strokeDasharray: dash }     : {})}
+            {...(filter ? { filter }                     : {})}
+            className={pulse ? 'target-dash' : undefined}
+            style={{ cursor: 'pointer', transition: 'fill .1s' }}
             onClick={() => onTerritoryClick(id)}
             onMouseEnter={() => onHover(id)}
             onMouseLeave={() => onHover(null)}
           >
             <title>{TERRITORIES[id].name}</title>
-          </polygon>
+          </path>
         );
       })}
 
-      {/* Army badges (plastic-piece tokens) */}
+      {/* Army badges — white disc, owner ring, dark bold count */}
       {ids.map((id) => {
         const { x, y } = TERRITORY_CENTROID[id];
         const owner = state.owner[id];
-        const ownerColor = PLAYER_COLORS[owner] ?? '#888';
+        const ownerColor = PLAYER_COLORS[owner] ?? NEUTRAL_COLOR;
         const armies = state.armies[id] ?? 0;
+        const r = armies >= 100 ? 14 : armies >= 10 ? 13 : 12;
         return (
           <g key={`badge-${id}`} style={{ pointerEvents: 'none' }}>
-            <circle cx={x} cy={y + 1} r={12.5} fill="rgba(0,0,0,0.35)" />
-            <circle cx={x} cy={y} r={12.5} fill="#141b27" stroke={ownerColor} strokeWidth={3} />
+            {/* Shadow */}
+            <circle cx={x} cy={y + 1.5} r={r + 1} fill="rgba(0,0,0,0.4)" />
+            {/* White disc */}
+            <circle cx={x} cy={y} r={r + 1} fill="#f5f5f0" />
+            {/* Owner ring */}
+            <circle cx={x} cy={y} r={r + 1} fill="none" stroke={ownerColor} strokeWidth={3} />
+            {/* Army count */}
             <text
               x={x} y={y + 0.5}
               textAnchor="middle" dominantBaseline="central"
-              fontSize={armies >= 10 ? 10 : 12} fontWeight={800} fill="#fff"
-            >
-              {armies}
-            </text>
+              fontSize={armies >= 100 ? 9 : armies >= 10 ? 10 : 11}
+              fontWeight={800}
+              fill="#14202e"
+              fontFamily="system-ui, sans-serif"
+            >{armies}</text>
           </g>
         );
       })}

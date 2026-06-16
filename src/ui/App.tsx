@@ -14,11 +14,11 @@ import { createInitialState, type GameState, type PlayerId } from '../engine/sta
 import { type Action, reduce } from '../engine/actions';
 import { chooseAction } from '../engine/ai';
 import { Board } from './Board';
-import { Sidebar } from './Sidebar';
 import { DicePanel } from './Dice';
+import { PhaseHud } from './PhaseHud';
+import { Roster } from './Roster';
+import { CornerControls } from './CornerControls';
 
-// ---------------------------------------------------------------------------
-// Constants
 // ---------------------------------------------------------------------------
 
 export const HUMAN_ID: PlayerId = 'You';
@@ -26,7 +26,7 @@ export const CPU_ID: PlayerId = 'CPU';
 
 export const PLAYER_COLORS: Record<PlayerId, string> = {
   [HUMAN_ID]: '#3d7fd6',
-  [CPU_ID]: '#d6453d',
+  [CPU_ID]:   '#d6453d',
 };
 
 const CPU_DELAY_MS = 600;
@@ -51,13 +51,13 @@ function buildInitialState(): GameState {
 }
 
 export function App() {
-  const [state, setState] = useState<GameState>(buildInitialState);
-  const [selected, setSelected] = useState<TerritoryId | null>(null);
-  const [hovered, setHovered] = useState<TerritoryId | null>(null);
+  const [state, setState]           = useState<GameState>(buildInitialState);
+  const [selected, setSelected]     = useState<TerritoryId | null>(null);
+  const [hovered, setHovered]       = useState<TerritoryId | null>(null);
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
   const [lastCombat, setLastCombat] = useState<CombatResult | null>(null);
-  const [combatSeq, setCombatSeq] = useState(0);
-  const [aiRunning, setAiRunning] = useState(false);
+  const [combatSeq, setCombatSeq]   = useState(0);
+  const [aiRunning, setAiRunning]   = useState(false);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -74,14 +74,11 @@ export function App() {
     const { attackerLosses, defenderLosses } = resolveCombat(action.attackerRolls, action.defenderRolls);
     const defArmies = s.armies[action.to] ?? 0;
     setLastCombat({
-      from: action.from,
-      to: action.to,
+      from: action.from, to: action.to,
       attacker: s.players[s.turnPointer]?.id ?? HUMAN_ID,
       defender: s.owner[action.to],
-      attackerRolls: action.attackerRolls,
-      defenderRolls: action.defenderRolls,
-      attackerLosses,
-      defenderLosses,
+      attackerRolls: action.attackerRolls, defenderRolls: action.defenderRolls,
+      attackerLosses, defenderLosses,
       captured: defenderLosses >= defArmies,
     });
     setCombatSeq((n) => n + 1);
@@ -91,16 +88,12 @@ export function App() {
 
   const isHumanTurn = state.players[state.turnPointer]?.id === HUMAN_ID;
 
-  // ---- CPU automation (600ms between actions) ------------------------------
-  // A ref (not `aiRunning` state) guards the loop. Using state in the dep array
-  // would make the effect cancel its own scheduled step on the re-render that
-  // sets the flag — the loop would never advance.
-
+  // ---- CPU automation (ref-guarded; `aiRunning` kept out of deps intentionally) ----
   const aiActive = useRef(false);
 
   useEffect(() => {
     if (isHumanTurn || state.winner !== null) return;
-    if (aiActive.current) return; // a loop is already running for this turn
+    if (aiActive.current) return;
     aiActive.current = true;
     setAiRunning(true);
 
@@ -108,18 +101,12 @@ export function App() {
     let timer: ReturnType<typeof setTimeout>;
     const rng = () => Math.random();
 
-    function finish() {
-      aiActive.current = false;
-      setAiRunning(false);
-    }
+    function finish() { aiActive.current = false; setAiRunning(false); }
 
     function step() {
       if (cancelled) return;
       const s = stateRef.current;
-      if (s.winner !== null || s.players[s.turnPointer]?.id === HUMAN_ID) {
-        finish();
-        return;
-      }
+      if (s.winner !== null || s.players[s.turnPointer]?.id === HUMAN_ID) { finish(); return; }
       const action = chooseAction(s, rng);
       if (action.type === 'ATTACK') showCombatRef.current(s, action);
       dispatchRef.current(action);
@@ -127,14 +114,10 @@ export function App() {
     }
 
     timer = setTimeout(step, 450);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-      aiActive.current = false;
-    };
+    return () => { cancelled = true; clearTimeout(timer); aiActive.current = false; };
   }, [isHumanTurn, state.winner, state.turnPointer]);
 
-  // ---- Human interaction ---------------------------------------------------
+  // ---- Human click handler ---------------------------------------------------
 
   const phase = state.phase;
 
@@ -155,9 +138,9 @@ export function App() {
       } else if (state.owner[id] !== HUMAN_ID) {
         if (!validateAttack(state, selected, id).ok) return;
         const fromArmies = state.armies[selected] ?? 0;
-        const toArmies = state.armies[id] ?? 0;
+        const toArmies   = state.armies[id] ?? 0;
         const attackerRolls = rollDice(attackDiceCount(fromArmies), Math.random);
-        const defenderRolls = rollDice(defenseDiceCount(toArmies), Math.random);
+        const defenderRolls = rollDice(defenseDiceCount(toArmies),  Math.random);
         const { attackerLosses, defenderLosses } = resolveCombat(attackerRolls, defenderRolls);
         const captured = toArmies - defenderLosses <= 0;
         const action: Action = {
@@ -188,7 +171,7 @@ export function App() {
 
   function onEndPhase() {
     if (!isHumanTurn || state.winner !== null) return;
-    try { dispatch({ type: 'END_PHASE' }); } catch { /* reducer rejected (armies remain) */ }
+    try { dispatch({ type: 'END_PHASE' }); } catch { /* reducer rejected */ }
   }
 
   function onToggleCard(i: number) {
@@ -205,65 +188,77 @@ export function App() {
 
   function onRestart() {
     setState(buildInitialState());
-    setSelected(null);
-    setHovered(null);
-    setSelectedCards([]);
-    setLastCombat(null);
+    setSelected(null); setHovered(null);
+    setSelectedCards([]); setLastCombat(null);
     setAiRunning(false);
   }
 
-  // ---- Highlight sets ------------------------------------------------------
+  // ---- Highlight sets -------------------------------------------------------
 
   const validTargets = new Set<TerritoryId>();
   if (isHumanTurn && selected !== null) {
     if (phase === 'attack') {
       for (const id of ALL_TERRITORY_IDS) {
-        if (state.owner[id] !== HUMAN_ID && validateAttack(state, selected, id).ok) validTargets.add(id);
+        if (state.owner[id] !== HUMAN_ID && validateAttack(state, selected, id).ok)
+          validTargets.add(id);
       }
     } else if (phase === 'fortify') {
       for (const id of ALL_TERRITORY_IDS) {
-        if (state.owner[id] === HUMAN_ID && id !== selected && connectedThroughOwned(state, HUMAN_ID, selected, id)) {
+        if (state.owner[id] === HUMAN_ID && id !== selected &&
+            connectedThroughOwned(state, HUMAN_ID, selected, id))
           validTargets.add(id);
-        }
       }
     }
   }
 
-  // Hover preview of attack targets when nothing is selected yet
   const hoverTargets = new Set<TerritoryId>();
   if (isHumanTurn && selected === null && hovered && phase === 'attack' &&
       state.owner[hovered] === HUMAN_ID && (state.armies[hovered] ?? 0) >= 2) {
     for (const n of neighbors(hovered)) {
-      if (state.owner[n] !== HUMAN_ID && validateAttack(state, hovered, n).ok) hoverTargets.add(n);
+      if (state.owner[n] !== HUMAN_ID && validateAttack(state, hovered, n).ok)
+        hoverTargets.add(n);
     }
   }
 
+  // ---------------------------------------------------------------------------
+
   return (
-    <div style={{ display: 'flex', height: '100dvh', overflow: 'hidden' }}>
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', background: '#0a1a2c' }}>
-        <Board
-          state={state}
-          selected={selected}
-          validTargets={validTargets}
-          hoverTargets={hoverTargets}
-          hovered={hovered}
-          onTerritoryClick={onTerritoryClick}
-          onHover={setHovered}
-        />
-        <DicePanel result={lastCombat} seq={combatSeq} />
-        {state.winner !== null && <WinnerBanner winner={state.winner} onRestart={onRestart} />}
-      </div>
-      <Sidebar
+    <div style={{ width: '100dvw', height: '100dvh', overflow: 'hidden', position: 'relative', background: '#091524' }}>
+      <Board
+        state={state}
+        selected={selected}
+        validTargets={validTargets}
+        hoverTargets={hoverTargets}
+        hovered={hovered}
+        onTerritoryClick={onTerritoryClick}
+        onHover={setHovered}
+      />
+
+      {/* Overlays — all positioned absolute relative to the Board */}
+      <DicePanel result={lastCombat} seq={combatSeq} />
+
+      <Roster state={state} />
+
+      <PhaseHud
         state={state}
         isHumanTurn={isHumanTurn}
         aiRunning={aiRunning}
         selected={selected}
+        onEndPhase={onEndPhase}
+      />
+
+      <CornerControls
+        state={state}
+        isHumanTurn={isHumanTurn}
         selectedCards={selectedCards}
         onToggleCard={onToggleCard}
         onTradeSelected={onTradeSelected}
-        onEndPhase={onEndPhase}
         onRestart={onRestart}
       />
+
+      {state.winner !== null && (
+        <WinnerBanner winner={state.winner} onRestart={onRestart} />
+      )}
     </div>
   );
 }
@@ -275,13 +270,21 @@ function WinnerBanner({ winner, onRestart }: { winner: PlayerId; onRestart: () =
   return (
     <div style={{
       position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.72)', zIndex: 10,
+      alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(0,0,0,0.72)', zIndex: 10,
     }}>
-      <div style={{ background: '#16213e', border: `3px solid ${color}`, borderRadius: 16, padding: '40px 60px', textAlign: 'center' }}>
+      <div style={{
+        background: '#14202e', border: `3px solid ${color}`, borderRadius: 18,
+        padding: '40px 60px', textAlign: 'center',
+        boxShadow: `0 0 60px ${color}44`,
+      }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>🌍</div>
-        <div style={{ fontSize: 28, fontWeight: 700, color, marginBottom: 4 }}>{winner} wins!</div>
-        <div style={{ color: '#aaa', marginBottom: 24 }}>World domination achieved.</div>
-        <button onClick={onRestart} style={btnStyle('#3d7fd6')}>Play again</button>
+        <div style={{ fontSize: 28, fontWeight: 800, color, marginBottom: 6 }}>{winner} wins!</div>
+        <div style={{ color: '#8a9ab0', marginBottom: 24 }}>World domination achieved.</div>
+        <button onClick={onRestart} style={{
+          background: color, color: '#fff', border: 'none', borderRadius: 10,
+          padding: '11px 28px', fontSize: 15, fontWeight: 700, cursor: 'pointer',
+        }}>Play again</button>
       </div>
     </div>
   );
