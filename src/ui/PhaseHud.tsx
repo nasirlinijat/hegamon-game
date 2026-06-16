@@ -1,6 +1,5 @@
 import type { GameState } from '../engine/state';
 import { Avatar } from './Avatar';
-import { HUMAN_ID } from './App';
 
 interface Props {
   state: GameState;
@@ -11,6 +10,7 @@ interface Props {
 }
 
 const PHASE_META: Record<string, { label: string; color: string }> = {
+  setup:     { label: 'SETUP',     color: '#8a6bd6' },
   reinforce: { label: 'REINFORCE', color: '#4a90d9' },
   attack:    { label: 'ATTACK',    color: '#d65050' },
   fortify:   { label: 'FORTIFY',   color: '#4a9e5c' },
@@ -30,8 +30,12 @@ export function PhaseHud({ state, isHumanTurn, aiRunning, selected, onEndPhase }
     phase === 'fortify'
   );
 
+  const setupLeft = state.setupRemaining[current.id] ?? 0;
+
   const hint = isHumanTurn ? (
-    phase === 'reinforce'
+    phase === 'setup'
+      ? `Place ${setupLeft} starting arm${setupLeft === 1 ? 'y' : 'ies'} — click your territories`
+      : phase === 'reinforce'
       ? (rem > 0 ? `Place ${rem} arm${rem === 1 ? 'y' : 'ies'} — click your territories` : 'All placed — end phase')
       : phase === 'attack'
         ? (selected ? `${selected.replace(/-/g, ' ')} selected — click an enemy` : 'Click a territory (≥2) to attack')
@@ -48,7 +52,7 @@ export function PhaseHud({ state, isHumanTurn, aiRunning, selected, onEndPhase }
         }}>{meta.label}</span>
         <span style={{ fontSize: 12, color: '#b0bec8', maxWidth: 240 }}>{hint}</span>
       </div>
-      {isHumanTurn && state.winner === null && (
+      {isHumanTurn && state.winner === null && phase !== 'setup' && (
         <button
           onClick={onEndPhase}
           disabled={!canEnd}
@@ -102,5 +106,3 @@ const hudWrap: React.CSSProperties = {
   zIndex: 4,
   pointerEvents: 'auto',
 };
-
-export { HUMAN_ID };

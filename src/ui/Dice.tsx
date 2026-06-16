@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { CombatResult } from './App';
 import { PLAYER_COLORS } from './App';
-import { HUMAN_ID, CPU_ID } from './App';
 
 type Outcome = 'win' | 'loss' | 'neutral' | 'rolling';
 
@@ -159,6 +158,3 @@ const KEYFRAMES = `
 @keyframes shake { 0%{transform:translateY(-1px) rotate(-4deg)} 50%{transform:translateY(1px) rotate(4deg)} 100%{transform:translateY(-1px) rotate(-4deg)} }
 @keyframes dropIn { from{opacity:0} to{opacity:1} }
 `;
-
-// Re-export ids so callers importing from Dice get consistent constants.
-export { HUMAN_ID, CPU_ID };

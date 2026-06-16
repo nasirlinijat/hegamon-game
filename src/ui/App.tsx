@@ -19,16 +19,21 @@ import { PhaseHud } from './PhaseHud';
 import { Roster } from './Roster';
 import { CornerControls } from './CornerControls';
 import { Legend } from './Legend';
+import { SetupScreen } from './SetupScreen';
 
 // ---------------------------------------------------------------------------
 
 export const HUMAN_ID: PlayerId = 'You';
-export const CPU_ID: PlayerId = 'CPU';
 
-export const PLAYER_COLORS: Record<PlayerId, string> = {
-  [HUMAN_ID]: '#3d7fd6',
-  [CPU_ID]:   '#d6453d',
-};
+/** Canonical player ids: human first, then CPUs. Colors are assigned by index. */
+export const PLAYER_IDS: PlayerId[] = [HUMAN_ID, 'CPU 1', 'CPU 2', 'CPU 3', 'CPU 4', 'CPU 5'];
+
+const PALETTE = ['#3d7fd6', '#d6453d', '#4a9e5c', '#d99b32', '#9b59b6', '#16a0a0'];
+
+/** Pre-populated for every canonical id, so any 2–6 player subset just works. */
+export const PLAYER_COLORS: Record<PlayerId, string> = Object.fromEntries(
+  PLAYER_IDS.map((id, i) => [id, PALETTE[i]!]),
+);
 
 const CPU_DELAY_MS = 600;
 
@@ -46,13 +51,15 @@ export interface CombatResult {
 
 // ---------------------------------------------------------------------------
 
-function buildInitialState(): GameState {
+function buildInitialState(numOpponents: number): GameState {
   const deck = createDeck(() => Math.random());
-  return createInitialState([HUMAN_ID, CPU_ID], { deck });
+  const ids = PLAYER_IDS.slice(0, numOpponents + 1);
+  return createInitialState(ids, { deck, setup: true });
 }
 
 export function App() {
-  const [state, setState]           = useState<GameState>(buildInitialState);
+  const [screen, setScreen]         = useState<'setup' | 'game'>('setup');
+  const [state, setState]           = useState<GameState>(() => buildInitialState(1));
   const [selected, setSelected]     = useState<TerritoryId | null>(null);
   const [hovered, setHovered]       = useState<TerritoryId | null>(null);
   const [selectedCards, setSelectedCards] = useState<number[]>([]);
@@ -93,6 +100,7 @@ export function App() {
   const aiActive = useRef(false);
 
   useEffect(() => {
+    if (screen !== 'game') return;
     if (isHumanTurn || state.winner !== null) return;
     if (aiActive.current) return;
     aiActive.current = true;
@@ -111,12 +119,14 @@ export function App() {
       const action = chooseAction(s, rng);
       if (action.type === 'ATTACK') showCombatRef.current(s, action);
       dispatchRef.current(action);
-      timer = setTimeout(step, CPU_DELAY_MS);
+      timer = setTimeout(step, s.phase === 'setup' ? 180 : CPU_DELAY_MS);
     }
 
-    timer = setTimeout(step, 450);
+    // Faster pacing during setup placement (many small placements).
+    const firstDelay = state.phase === 'setup' ? 220 : 450;
+    timer = setTimeout(step, firstDelay);
     return () => { cancelled = true; clearTimeout(timer); aiActive.current = false; };
-  }, [isHumanTurn, state.winner, state.turnPointer]);
+  }, [screen, isHumanTurn, state.winner, state.turnPointer, state.phase]);
 
   // ---- Human click handler ---------------------------------------------------
 
@@ -124,6 +134,12 @@ export function App() {
 
   function onTerritoryClick(id: TerritoryId) {
     if (!isHumanTurn || state.winner !== null || state.mustTradeCards) return;
+
+    if (phase === 'setup') {
+      if (state.owner[id] !== HUMAN_ID || (state.setupRemaining[HUMAN_ID] ?? 0) <= 0) return;
+      dispatch({ type: 'REINFORCE', territory: id, count: 1 });
+      return;
+    }
 
     if (phase === 'reinforce') {
       if (state.owner[id] !== HUMAN_ID || state.reinforcementsRemaining <= 0) return;
@@ -187,11 +203,22 @@ export function App() {
     dispatch({ type: 'TRADE_IN', cardIndices: [a!, b!, c!] });
   }
 
-  function onRestart() {
-    setState(buildInitialState());
+  function resetCommon() {
     setSelected(null); setHovered(null);
     setSelectedCards([]); setLastCombat(null);
     setAiRunning(false);
+    aiActive.current = false;
+  }
+
+  function onStart(numOpponents: number) {
+    setState(buildInitialState(numOpponents));
+    resetCommon();
+    setScreen('game');
+  }
+
+  function onRestart() {
+    resetCommon();
+    setScreen('setup');
   }
 
   // ---- Highlight sets -------------------------------------------------------
@@ -222,6 +249,14 @@ export function App() {
   }
 
   // ---------------------------------------------------------------------------
+
+  if (screen === 'setup') {
+    return (
+      <div style={{ width: '100dvw', height: '100dvh', overflow: 'hidden', position: 'relative', background: '#07101d' }}>
+        <SetupScreen onStart={onStart} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: '100dvw', height: '100dvh', overflow: 'hidden', position: 'relative', background: '#091524' }}>
