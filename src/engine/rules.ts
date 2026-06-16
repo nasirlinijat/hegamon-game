@@ -140,15 +140,39 @@ export function applyAttack(
   }
 
   const pid = currentPlayerId(state);
+  const prevOwner = state.owner[action.to]!;
+  const newOwner = { ...state.owner, [action.to]: pid };
+  const newArmies = {
+    ...state.armies,
+    [action.from]: fromArmies - effectiveMove,
+    [action.to]: effectiveMove,
+  };
+
+  // Elimination: if prev owner now has 0 territories, mark them dead + transfer cards.
+  let newPlayers = state.players;
+  const prevOwnerRemaining = ALL_TERRITORY_IDS.filter((id) => newOwner[id] === prevOwner);
+  if (prevOwnerRemaining.length === 0) {
+    const eliminatedIdx = state.players.findIndex((p) => p.id === prevOwner);
+    const attackerIdx = state.players.findIndex((p) => p.id === pid);
+    if (eliminatedIdx >= 0 && attackerIdx >= 0) {
+      const loserCards = state.players[eliminatedIdx]!.cards;
+      newPlayers = state.players.map((p, i) => {
+        if (i === eliminatedIdx) return { ...p, alive: false, cards: [] as readonly (typeof p.cards)[number][] };
+        if (i === attackerIdx) return { ...p, cards: [...p.cards, ...loserCards] };
+        return p;
+      });
+    }
+  }
+
+  const winner = ALL_TERRITORY_IDS.every((id) => newOwner[id] === pid) ? pid : null;
+
   return {
     ...state,
-    owner: { ...state.owner, [action.to]: pid },
-    armies: {
-      ...state.armies,
-      [action.from]: fromArmies - effectiveMove,
-      [action.to]: effectiveMove,
-    },
+    owner: newOwner,
+    armies: newArmies,
+    players: newPlayers,
     capturedThisTurn: true,
+    winner,
   };
 }
 
@@ -202,6 +226,17 @@ export function checkWin(state: GameState): PlayerId | null {
 }
 
 // --- Turn advancement (called by END_PHASE in actions.ts when leaving fortify) ---
+
+/** Returns the index of the next alive player after state.turnPointer (wraps around). */
+export function nextAlivePointer(state: GameState): number {
+  const n = state.players.length;
+  for (let i = 1; i < n; i++) {
+    const ptr = (state.turnPointer + i) % n;
+    if (state.players[ptr]?.alive) return ptr;
+  }
+  // Should never be reached: checkWin fires before the last opponent is eliminated.
+  throw new Error('nextAlivePointer: no alive players remaining');
+}
 
 export function startTurn(state: GameState, playerId: PlayerId, turnPointer: number): GameState {
   const reinforcements = calcReinforcements(state, playerId);

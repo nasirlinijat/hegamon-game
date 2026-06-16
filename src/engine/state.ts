@@ -32,6 +32,8 @@ export interface GameState {
   readonly fortifiedThisTurn: boolean;
   /** Escalating trade-in counter (shared/global). */
   readonly tradeInCount: number;
+  /** Non-null when the game is over. No further actions are allowed. */
+  readonly winner: PlayerId | null;
 }
 
 // --- Shared validation result type (used by all validate* in rules.ts) ---
@@ -110,5 +112,6 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
     capturedThisTurn: false,
     fortifiedThisTurn: false,
     tradeInCount: 0,
+    winner: null,
   };
 }

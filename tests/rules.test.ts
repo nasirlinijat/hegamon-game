@@ -472,7 +472,7 @@ describe('reduce (purity)', () => {
   });
 
   it('END_PHASE reinforce→attack returns new object in attack phase', () => {
-    const state = deepFreeze(createInitialState(['P1', 'P2']));
+    const state = deepFreeze({ ...createInitialState(['P1', 'P2']), reinforcementsRemaining: 0 });
     const next = reduce(state, { type: 'END_PHASE' });
     expect(next.phase).toBe('attack');
     expect(next).not.toBe(state);
