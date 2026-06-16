@@ -19,6 +19,8 @@ export function chooseAction(state: GameState, rng: Rng): Action {
   if (state.mustTradeCards) return chooseTrade(state);
 
   switch (state.phase) {
+    case 'setup':
+      return chooseSetupPlacement(state);
     case 'reinforce':
       return chooseReinforce(state);
     case 'attack':
@@ -26,6 +28,26 @@ export function chooseAction(state: GameState, rng: Rng): Action {
     case 'fortify':
       return chooseFortify(state);
   }
+}
+
+// --- Setup ---
+// Place one army on the owned border territory with the most enemy neighbours.
+
+function chooseSetupPlacement(state: GameState): Action {
+  const pid = currentPlayerId(state);
+  const myTerrs = territoriesOf(state, pid);
+
+  let best: TerritoryId = myTerrs[0]!;
+  let bestScore = -1;
+  for (const t of myTerrs) {
+    const score = neighbors(t).filter((n) => state.owner[n] !== pid).length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  }
+
+  return { type: 'REINFORCE', territory: best, count: 1 };
 }
 
 // --- Reinforce ---

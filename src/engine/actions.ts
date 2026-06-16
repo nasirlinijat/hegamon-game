@@ -4,6 +4,7 @@ import {
   validateReinforce,
   validateFortify,
   applyAttack,
+  applySetupPlacement,
   startTurn,
   currentPlayerId,
   nextAlivePointer,
@@ -30,6 +31,11 @@ export function reduce(state: GameState, action: Action): GameState {
     throw new IllegalActionError('the game is already over');
   }
 
+  // During the setup phase, only REINFORCE (army placement) is allowed.
+  if (state.phase === 'setup' && action.type !== 'REINFORCE') {
+    throw new IllegalActionError(`${action.type} is not allowed during the setup phase`);
+  }
+
   // When a forced trade is required, only TRADE_IN is allowed.
   if (state.mustTradeCards && action.type !== 'TRADE_IN') {
     throw new IllegalActionError('must trade in a set of cards before continuing');
@@ -37,6 +43,10 @@ export function reduce(state: GameState, action: Action): GameState {
 
   switch (action.type) {
     case 'REINFORCE': {
+      // During the setup phase, REINFORCE places one of the player's starting armies.
+      if (state.phase === 'setup') {
+        return applySetupPlacement(state, action.territory, action.count);
+      }
       // Also allowed mid-attack if there are trade-in armies waiting to be placed.
       const inReinforcePhase = state.phase === 'reinforce';
       const midAttackPlacement = state.phase === 'attack' && state.reinforcementsRemaining > 0;

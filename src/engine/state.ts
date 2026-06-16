@@ -1,7 +1,16 @@
 import { type TerritoryId, ALL_TERRITORY_IDS, CONTINENTS } from './map';
 
 export type PlayerId = string;
-export type Phase = 'reinforce' | 'attack' | 'fortify';
+export type Phase = 'setup' | 'reinforce' | 'attack' | 'fortify';
+
+/** Starting armies by player count (standard Risk; 2-player uses 40 each, no neutral). */
+export const STARTING_ARMIES: Record<number, number> = {
+  2: 40,
+  3: 35,
+  4: 30,
+  5: 25,
+  6: 20,
+};
 
 // Card types for Phase 5 — defined here so GameState.cards is final-shaped now.
 export type CardType = 'infantry' | 'cavalry' | 'artillery' | 'wild';
@@ -40,6 +49,11 @@ export interface GameState {
   readonly discard: readonly Card[];
   /** True when the current player must trade a set before any other action. */
   readonly mustTradeCards: boolean;
+  /**
+   * During the `setup` phase, how many armies each player still has to place.
+   * Empty `{}` for games created without the setup phase.
+   */
+  readonly setupRemaining: Readonly<Record<PlayerId, number>>;
 }
 
 // --- Shared validation result type (used by all validate* in rules.ts) ---
@@ -68,10 +82,16 @@ export function territoriesOf(state: GameState, playerId: PlayerId): TerritoryId
 // --- Test / setup helper ---
 
 export interface InitOptions {
-  /** Starting armies per territory (default: 3). */
+  /** Starting armies per territory (default: 3). Ignored when `setup` is true (always 1). */
   armiesPerTerritory?: number;
   /** Pre-built (optionally shuffled) draw pile. If omitted, deck starts empty. */
   deck?: readonly Card[];
+  /**
+   * When true, deal 1 army per territory and enter the `setup` phase with each player
+   * holding STARTING_ARMIES[N] − (territories dealt) armies to place. When false/omitted,
+   * the legacy behavior is used: a flat `armiesPerTerritory` and an immediate reinforce phase.
+   */
+  setup?: boolean;
 }
 
 /**
@@ -80,16 +100,19 @@ export interface InitOptions {
  */
 export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}): GameState {
   if (playerIds.length < 2) throw new Error('Need at least 2 players');
-  const armiesPerTerritory = opts.armiesPerTerritory ?? 3;
+  const setup = opts.setup === true;
+  const armiesPerTerritory = setup ? 1 : (opts.armiesPerTerritory ?? 3);
 
   const owner = {} as Record<TerritoryId, PlayerId>;
   const armies = {} as Record<TerritoryId, number>;
+  const dealtCount: Record<PlayerId, number> = {};
 
   ALL_TERRITORY_IDS.forEach((id, i) => {
     const pid = playerIds[i % playerIds.length];
     if (pid === undefined) throw new Error('playerIds cannot be empty');
     owner[id] = pid;
     armies[id] = armiesPerTerritory;
+    dealtCount[pid] = (dealtCount[pid] ?? 0) + 1;
   });
 
   const COLORS = ['red', 'blue', 'green', 'yellow', 'purple', 'orange'];
@@ -100,9 +123,38 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
     alive: true,
   }));
 
-  // Compute reinforcements for the first player.
   const firstId = playerIds[0];
   if (firstId === undefined) throw new Error('playerIds cannot be empty');
+
+  const common = {
+    players,
+    turnPointer: 0,
+    owner,
+    armies,
+    capturedThisTurn: false,
+    fortifiedThisTurn: false,
+    tradeInCount: 0,
+    winner: null as PlayerId | null,
+    deck: opts.deck ?? [],
+    discard: [] as readonly Card[],
+    mustTradeCards: false,
+  };
+
+  // --- Setup mode: players still have armies to place ---
+  if (setup) {
+    const starting = STARTING_ARMIES[playerIds.length];
+    if (starting === undefined) throw new Error(`No starting-army count for ${playerIds.length} players`);
+    const setupRemaining: Record<PlayerId, number> = {};
+    for (const pid of playerIds) setupRemaining[pid] = starting - (dealtCount[pid] ?? 0);
+    return {
+      ...common,
+      phase: 'setup',
+      reinforcementsRemaining: 0,
+      setupRemaining,
+    };
+  }
+
+  // --- Legacy mode: jump straight into the first player's reinforce phase ---
   const firstTerritories = ALL_TERRITORY_IDS.filter((id) => owner[id] === firstId);
   const base = Math.max(3, Math.floor(firstTerritories.length / 3));
   const continentBonus = Object.values(CONTINENTS).reduce((sum, c) => {
@@ -111,18 +163,9 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
   }, 0);
 
   return {
-    players,
-    turnPointer: 0,
+    ...common,
     phase: 'reinforce',
-    owner,
-    armies,
     reinforcementsRemaining: base + continentBonus,
-    capturedThisTurn: false,
-    fortifiedThisTurn: false,
-    tradeInCount: 0,
-    winner: null,
-    deck: opts.deck ?? [],
-    discard: [],
-    mustTradeCards: false,
+    setupRemaining: {},
   };
 }

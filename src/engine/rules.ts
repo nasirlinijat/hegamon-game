@@ -46,6 +46,50 @@ export function validateReinforce(
   return { ok: true };
 }
 
+// --- Setup placement ---
+
+/**
+ * Place `count` armies on an owned territory during the `setup` phase, decrement the
+ * current player's setup pool, and pass to the next player who still has armies to place.
+ * When everyone has placed all their armies, transition into the first player's turn.
+ */
+export function applySetupPlacement(
+  state: GameState,
+  territory: TerritoryId,
+  count: number,
+): GameState {
+  const pid = currentPlayerId(state);
+  if (state.owner[territory] !== pid)
+    throw new IllegalActionError(`${territory} is not owned by ${pid}`);
+  const remaining = state.setupRemaining[pid] ?? 0;
+  if (count < 1) throw new IllegalActionError('count must be at least 1');
+  if (count > remaining)
+    throw new IllegalActionError(`count ${count} exceeds ${pid}'s setup pool of ${remaining}`);
+
+  const newRemaining = { ...state.setupRemaining, [pid]: remaining - count };
+  const newArmies = { ...state.armies, [territory]: (state.armies[territory] ?? 0) + count };
+  const totalLeft = Object.values(newRemaining).reduce((a, b) => a + b, 0);
+
+  const placed: GameState = { ...state, armies: newArmies, setupRemaining: newRemaining };
+
+  // Everyone has placed everything → begin the first player's first turn.
+  if (totalLeft === 0) {
+    return startTurn(placed, placed.players[0]!.id, 0);
+  }
+
+  // Otherwise pass to the next alive player who still has armies to place.
+  const n = state.players.length;
+  for (let i = 1; i <= n; i++) {
+    const cand = (state.turnPointer + i) % n;
+    const cp = state.players[cand]!;
+    if (cp.alive && (newRemaining[cp.id] ?? 0) > 0) {
+      return { ...placed, turnPointer: cand };
+    }
+  }
+  // Unreachable: totalLeft > 0 guarantees some player still has armies.
+  return placed;
+}
+
 // --- Dice helpers ---
 
 export function attackDiceCount(attackingArmies: number): number {
