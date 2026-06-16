@@ -9,6 +9,7 @@ import {
   ownsContinent,
   validateReinforce,
   applyAttack,
+  resolveBlitz,
   validateFortify,
   checkWin,
 } from '../src/engine/rules';
@@ -488,5 +489,67 @@ describe('reduce (purity)', () => {
     expect(next.phase).toBe('reinforce');
     expect(next.capturedThisTurn).toBe(false);
     expect(next.fortifiedThisTurn).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveBlitz
+// ---------------------------------------------------------------------------
+
+/** Deterministic RNG that yields the given values in order, then holds the last. */
+function scriptedRng(values: number[]): () => number {
+  let i = 0;
+  return () => values[Math.min(i++, values.length - 1)]!;
+}
+// 0.99 → die face 6; 0.0 → die face 1.
+const HI = 0.99;
+const LO = 0.0;
+
+function boardTotal(s: GameState): number {
+  return ALL_TERRITORY_IDS.reduce((sum, id) => sum + (s.armies[id] ?? 0), 0);
+}
+
+describe('resolveBlitz', () => {
+  it('captures in a single sweeping round and advances all-but-one', () => {
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, alberta: 2 } as GameState['armies'],
+    });
+    // attacker rolls [6,6,6] (3 dice), defender [1,1] (2 dice) → defender loses both → capture.
+    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([HI, HI, HI, LO, LO]));
+    expect(captured).toBe(true);
+    expect(rounds).toHaveLength(1);
+    expect(state.owner['alberta']).toBe('P1');
+    expect(state.armies['alaska']).toBe(1);   // left exactly one behind
+    expect(state.armies['alberta']).toBe(9);  // moved 10 − 0 losses − 1
+  });
+
+  it('stops without capture when the attacker drops to one army', () => {
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 3, alberta: 3 } as GameState['armies'],
+    });
+    // attacker [1,1] vs defender [6,6] → attacker loses both → alaska 3→1, loop ends.
+    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([LO, LO, HI, HI]));
+    expect(captured).toBe(false);
+    expect(rounds).toHaveLength(1);
+    expect(state.owner['alberta']).toBe('P2');
+    expect(state.armies['alaska']).toBe(1);
+  });
+
+  it('conserves total board armies (changes only by combat losses)', () => {
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, alberta: 2 } as GameState['armies'],
+    });
+    const before = boardTotal(s);
+    const { state, rounds } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([HI, HI, HI, LO, LO]));
+    const losses = rounds.reduce((sum, r) => sum + r.attackerLosses + r.defenderLosses, 0);
+    expect(boardTotal(state)).toBe(before - losses);
+  });
+
+  it('rejects an illegal blitz (non-adjacent or under-strength source)', () => {
+    const s = twoPlayerState(['alaska'], { phase: 'attack' });
+    expect(() => resolveBlitz(s, 'alaska', 'brazil', scriptedRng([HI]))).toThrow();
   });
 });

@@ -7,6 +7,7 @@ import {
   territoriesOf,
 } from './state';
 import type { Action } from './actions';
+import { type Rng, rollDice } from './dice';
 
 // --- Exported helper used by actions.ts reducer ---
 
@@ -223,6 +224,66 @@ export function applyAttack(
     winner,
     mustTradeCards,
   };
+}
+
+// --- Blitz (auto-repeat attack) ---
+
+export interface BlitzRound {
+  readonly attackerRolls: readonly number[];
+  readonly defenderRolls: readonly number[];
+  readonly attackerLosses: number;
+  readonly defenderLosses: number;
+  readonly captured: boolean;
+}
+
+export interface BlitzResult {
+  readonly state: GameState;
+  readonly rounds: readonly BlitzRound[];
+  readonly captured: boolean;
+}
+
+/**
+ * Repeatedly attack `from → to` until the territory is captured or the attacker can no
+ * longer continue (drops to 1 army). RNG is injected so blitz is deterministic in tests.
+ * On a capturing round, all but one army advances. Returns the final state plus a
+ * per-round log for the UI to animate.
+ */
+export function resolveBlitz(state: GameState, from: TerritoryId, to: TerritoryId, rng: Rng): BlitzResult {
+  const v = validateAttack(state, from, to);
+  if (!v.ok) throw new IllegalActionError(v.reason);
+
+  let cur = state;
+  const rounds: BlitzRound[] = [];
+  let captured = false;
+
+  // Bounded by the defender's army count: each round removes ≥0 and the loop ends on
+  // capture or when the attacker can't continue, so this always terminates.
+  while ((cur.armies[from] ?? 0) >= 2) {
+    const fromArmies = cur.armies[from] ?? 0;
+    const toArmies = cur.armies[to] ?? 0;
+    const attackerRolls = rollDice(attackDiceCount(fromArmies), rng);
+    const defenderRolls = rollDice(defenseDiceCount(toArmies), rng);
+    const { attackerLosses, defenderLosses } = resolveCombat(attackerRolls, defenderRolls);
+    const willCapture = toArmies - defenderLosses <= 0;
+
+    // On capture, attackerLosses is provably 0 (attacker won every compared pair), so
+    // moving fromArmies − 1 always satisfies the engine's min/max move bounds.
+    const action: Action = {
+      type: 'ATTACK',
+      from,
+      to,
+      attackerRolls,
+      defenderRolls,
+      ...(willCapture ? { moveOnCapture: fromArmies - attackerLosses - 1 } : {}),
+    };
+    cur = applyAttack(cur, action);
+    rounds.push({ attackerRolls, defenderRolls, attackerLosses, defenderLosses, captured: willCapture });
+
+    if (willCapture) { captured = true; break; }
+    if (cur.winner !== null) break;
+  }
+
+  return { state: cur, rounds, captured };
 }
 
 // --- Fortify ---
