@@ -98,15 +98,13 @@ function chooseAttack(state: GameState, rng: Rng): Action {
   const fromArmiesAfter = fromArmies - attackerLosses;
   const toArmiesAfter = toArmies - defenderLosses;
 
-  const moveOnCapture = toArmiesAfter <= 0 ? fromArmiesAfter - 1 : undefined;
-
   return {
     type: 'ATTACK',
     from: bestFrom,
     to: bestTo,
     attackerRolls,
     defenderRolls,
-    moveOnCapture,
+    ...(toArmiesAfter <= 0 ? { moveOnCapture: fromArmiesAfter - 1 } : {}),
   };
 }
 

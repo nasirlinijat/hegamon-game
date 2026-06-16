@@ -56,11 +56,11 @@ Check items off as you go. Definition of done is at the bottom.
 - [x] Commit
 
 ## Phase 7 — UI
-- [ ] SVG world map; territories clickable; show owner color + army count
-- [ ] Phase controls (reinforce / attack / fortify / end turn)
-- [ ] Combat result display (dice + losses)
-- [ ] Wire UI to dispatch engine actions; UI holds NO rules
-- [ ] Commit
+- [x] SVG world map; territories clickable; show owner color + army count
+- [x] Phase controls (reinforce / attack / fortify / end turn)
+- [x] Combat result display (dice + losses)
+- [x] Wire UI to dispatch engine actions; UI holds NO rules
+- [x] Commit
 
 ## Phase 8 — Smarter AI (optional polish)
 - [ ] Prioritize completing and holding continents

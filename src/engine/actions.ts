@@ -1,5 +1,5 @@
 import { type TerritoryId } from './map';
-import { type GameState, type PlayerId, IllegalActionError } from './state';
+import { type GameState, IllegalActionError } from './state';
 import {
   validateReinforce,
   validateFortify,

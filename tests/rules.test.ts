@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createInitialState, type GameState, type PlayerId } from '../src/engine/state';
+import { createInitialState, type GameState } from '../src/engine/state';
 import { ALL_TERRITORY_IDS, CONTINENTS, type TerritoryId } from '../src/engine/map';
 import {
   resolveCombat,
@@ -8,10 +8,8 @@ import {
   calcReinforcements,
   ownsContinent,
   validateReinforce,
-  validateAttack,
   applyAttack,
   validateFortify,
-  connectedThroughOwned,
   checkWin,
 } from '../src/engine/rules';
 import { reduce } from '../src/engine/actions';
@@ -413,7 +411,7 @@ describe('validateFortify', () => {
     // All intermediate paths cross enemy territory.
     const separated = ['alaska', 'kamchatka'] as TerritoryId[];
     const s2 = twoPlayerState(separated, { phase: 'fortify' });
-    const s2a = { ...s2, armies: { ...s2.armies, alaska: 5, kamchatka: 2 } };
+    void s2; // s2 built but only s3/s3a are used for isolation assertion
     // alaska and kamchatka are adjacent → direct link, so this should pass.
     // For the real isolation test: P1 owns argentina and brazil; they're adjacent so it passes.
     // We need P1 to own two territories with no owned path between them.

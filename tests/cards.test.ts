@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { createInitialState, type GameState, type Card, type PlayerId } from '../src/engine/state';
 import { ALL_TERRITORY_IDS, type TerritoryId } from '../src/engine/map';
 import { reduce } from '../src/engine/actions';
-import { startTurn } from '../src/engine/rules';
 import {
   isValidSet,
   tradeInValue,
