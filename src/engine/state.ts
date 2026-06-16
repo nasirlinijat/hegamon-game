@@ -34,6 +34,12 @@ export interface GameState {
   readonly tradeInCount: number;
   /** Non-null when the game is over. No further actions are allowed. */
   readonly winner: PlayerId | null;
+  /** Cards available to draw (top = index 0). */
+  readonly deck: readonly Card[];
+  /** Cards returned after a set is traded in. Recycled into deck when draw pile empties. */
+  readonly discard: readonly Card[];
+  /** True when the current player must trade a set before any other action. */
+  readonly mustTradeCards: boolean;
 }
 
 // --- Shared validation result type (used by all validate* in rules.ts) ---
@@ -64,6 +70,8 @@ export function territoriesOf(state: GameState, playerId: PlayerId): TerritoryId
 export interface InitOptions {
   /** Starting armies per territory (default: 3). */
   armiesPerTerritory?: number;
+  /** Pre-built (optionally shuffled) draw pile. If omitted, deck starts empty. */
+  deck?: readonly Card[];
 }
 
 /**
@@ -113,5 +121,8 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
     fortifiedThisTurn: false,
     tradeInCount: 0,
     winner: null,
+    deck: opts.deck ?? [],
+    discard: [],
+    mustTradeCards: false,
   };
 }

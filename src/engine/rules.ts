@@ -166,6 +166,10 @@ export function applyAttack(
 
   const winner = ALL_TERRITORY_IDS.every((id) => newOwner[id] === pid) ? pid : null;
 
+  // Forced trade if attacker now holds ≥ 6 cards (from taking eliminated player's cards).
+  const attackerCards = newPlayers.find((p) => p.id === pid)?.cards ?? [];
+  const mustTradeCards = attackerCards.length >= 6;
+
   return {
     ...state,
     owner: newOwner,
@@ -173,6 +177,7 @@ export function applyAttack(
     players: newPlayers,
     capturedThisTurn: true,
     winner,
+    mustTradeCards,
   };
 }
 
@@ -240,6 +245,9 @@ export function nextAlivePointer(state: GameState): number {
 
 export function startTurn(state: GameState, playerId: PlayerId, turnPointer: number): GameState {
   const reinforcements = calcReinforcements(state, playerId);
+  const nextPlayer = state.players[turnPointer]!;
+  // Forced trade required if the incoming player holds 5+ cards at turn start.
+  const mustTradeCards = nextPlayer.cards.length >= 5;
   return {
     ...state,
     turnPointer,
@@ -247,5 +255,6 @@ export function startTurn(state: GameState, playerId: PlayerId, turnPointer: num
     reinforcementsRemaining: reinforcements,
     capturedThisTurn: false,
     fortifiedThisTurn: false,
+    mustTradeCards,
   };
 }
