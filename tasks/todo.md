@@ -50,10 +50,10 @@ Check items off as you go. Definition of done is at the bottom.
 - [ ] Commit
 
 ## Phase 6 — Basic AI
-- [ ] `ai.ts`: legal reinforcement placement, legal attacks, one legal fortify
-- [ ] Must ONLY ever produce legal actions (assert via reducer)
-- [ ] Test: AI-vs-AI game runs to completion with zero illegal moves
-- [ ] Commit
+- [x] `ai.ts`: legal reinforcement placement, legal attacks, one legal fortify
+- [x] Must ONLY ever produce legal actions (assert via reducer)
+- [x] Test: AI-vs-AI game runs to completion with zero illegal moves
+- [x] Commit
 
 ## Phase 7 — UI
 - [ ] SVG world map; territories clickable; show owner color + army count
