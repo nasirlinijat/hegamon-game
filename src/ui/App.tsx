@@ -18,6 +18,7 @@ import { DicePanel } from './Dice';
 import { PhaseHud } from './PhaseHud';
 import { Roster } from './Roster';
 import { CornerControls } from './CornerControls';
+import { Legend } from './Legend';
 
 // ---------------------------------------------------------------------------
 
@@ -236,6 +237,8 @@ export function App() {
 
       {/* Overlays — all positioned absolute relative to the Board */}
       <DicePanel result={lastCombat} seq={combatSeq} />
+
+      <Legend state={state} />
 
       <Roster state={state} />
 
