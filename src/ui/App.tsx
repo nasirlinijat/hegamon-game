@@ -92,29 +92,47 @@ export function App() {
   const isHumanTurn = state.players[state.turnPointer]?.id === HUMAN_ID;
 
   // ---- CPU automation (600ms between actions) ------------------------------
+  // A ref (not `aiRunning` state) guards the loop. Using state in the dep array
+  // would make the effect cancel its own scheduled step on the re-render that
+  // sets the flag — the loop would never advance.
+
+  const aiActive = useRef(false);
 
   useEffect(() => {
-    if (isHumanTurn || state.winner !== null || aiRunning) return;
+    if (isHumanTurn || state.winner !== null) return;
+    if (aiActive.current) return; // a loop is already running for this turn
+    aiActive.current = true;
     setAiRunning(true);
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
     const rng = () => Math.random();
 
+    function finish() {
+      aiActive.current = false;
+      setAiRunning(false);
+    }
+
     function step() {
+      if (cancelled) return;
       const s = stateRef.current;
       if (s.winner !== null || s.players[s.turnPointer]?.id === HUMAN_ID) {
-        setAiRunning(false);
+        finish();
         return;
       }
       const action = chooseAction(s, rng);
       if (action.type === 'ATTACK') showCombatRef.current(s, action);
       dispatchRef.current(action);
-      setTimeout(step, CPU_DELAY_MS);
+      timer = setTimeout(step, CPU_DELAY_MS);
     }
 
-    const t = setTimeout(step, 450);
-    return () => clearTimeout(t);
-  }, [isHumanTurn, state.winner, aiRunning, state.turnPointer]);
-
-  useEffect(() => { if (isHumanTurn) setAiRunning(false); }, [isHumanTurn]);
+    timer = setTimeout(step, 450);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      aiActive.current = false;
+    };
+  }, [isHumanTurn, state.winner, state.turnPointer]);
 
   // ---- Human interaction ---------------------------------------------------
 
