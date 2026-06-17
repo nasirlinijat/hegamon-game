@@ -50,6 +50,11 @@ export function Board({
           <circle cx="12" cy="12" r="0.7" fill="#ffffff" opacity="0.05" />
         </pattern>
 
+        {/* Clip territory fills to land only — prevents bbox fills bleeding into ocean */}
+        <clipPath id="land-clip">
+          <path d={LAND_PATH} />
+        </clipPath>
+
         {/* Cyan coastline glow filter */}
         <filter id="coast-glow" x="-4%" y="-4%" width="108%" height="108%">
           <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
@@ -144,7 +149,8 @@ export function Board({
             stroke={stroke}
             strokeWidth={strokeWidth}
             strokeLinejoin="round"
-            fillOpacity={0.86}
+            fillOpacity={0.9}
+            clipPath="url(#land-clip)"
             {...(dash   ? { strokeDasharray: dash } : {})}
             {...(filter ? { filter }                : {})}
             className={pulse ? 'target-dash' : undefined}

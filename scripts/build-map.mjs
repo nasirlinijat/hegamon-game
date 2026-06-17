@@ -86,18 +86,18 @@ function bbox(lonMin, lonMax, latMin, latMax) {
 
 const COMPOSITION = {
   // ── North America ──────────────────────────────────────────────────────────
-  // Alaska is a sub-national territory of the USA (840).
-  // Use a bbox covering the Alaskan peninsula and interior.
-  alaska:                 bbox(-180, -130, 54, 72),
-  // NW Territory covers northern Canada broadly.
-  'northwest-territory':  bbox(-141, -60, 58, 84),
+  // All sub-national bboxes are defined to be strictly non-overlapping.
+  // Alaska west of the 141°W border; lat 55–72 captures interior + peninsula.
+  alaska:                 bbox(-180, -141, 55, 72),
+  // NW Territory: all of northern Canada above 60°N, coast to coast.
+  'northwest-territory':  bbox(-141, -52, 60, 84),
   greenland:              countryFeat([304]),
-  // Alberta covers western Canada (south of NW Territory).
-  alberta:                bbox(-141, -96, 49, 60),
-  // Ontario covers central Canada.
-  ontario:                bbox(-96, -74, 42, 60),
-  // Quebec covers eastern Canada.
-  quebec:                 bbox(-79, -52, 44, 62),
+  // Alberta: BC + Alberta + SK + MB (south of NW Territory, west of 100°W).
+  alberta:                bbox(-141, -100, 49, 60),
+  // Ontario: central Canada south of NW Territory (100°W–76°W).
+  ontario:                bbox(-100, -76, 42, 60),
+  // Quebec: eastern Canada south of NW Territory (76°W–52°W).
+  quebec:                 bbox(-76, -52, 44, 60),
   'western-us':           bbox(-125, -100, 24, 49),
   'eastern-us':           bbox(-100, -67, 24, 47),
   // Mexico + Central America + Caribbean
@@ -143,16 +143,14 @@ const COMPOSITION = {
   'south-africa':         countryFeat([710, 516, 72, 894, 716, 508, 454, 748, 426, 24]),
   madagascar:             countryFeat([450]),
 
-  // ── Asia — Russia is split into 5 territories via bounding boxes ──────────
-  ural:                   bbox(55, 70, 52, 72),
-  // Siberia covers a broad central swath
-  siberia:                bbox(70, 109, 52, 76),
-  // Yakutsk: far north-east Russia
-  yakutsk:                bbox(108, 145, 60, 76),
-  // Kamchatka: far east peninsula (antimeridian area)
-  kamchatka:              bbox(140, 180, 48, 68),
-  // Irkutsk: south-central Russia, Lake Baikal region
-  irkutsk:                bbox(95, 125, 50, 61),
+  // ── Asia — Russia split into 5 strictly non-overlapping bounding boxes ──────
+  // Boundaries: Ural | 70 | Siberia | 105 | Irkutsk+Yakutsk | 140 | Kamchatka
+  //             Irkutsk lat 50–62; Yakutsk lat 62–76 (same lon range 105–140)
+  ural:                   bbox(55,  70,  52, 76),   // Ural Mts → 70°E
+  siberia:                bbox(70,  105, 52, 76),   // W Siberia 70°E–105°E
+  irkutsk:                bbox(105, 140, 50, 62),   // S-central, Baikal, lat 50–62
+  yakutsk:                bbox(105, 140, 62, 76),   // N Siberia / Yakutia, lat 62–76
+  kamchatka:              bbox(140, 180, 48, 76),   // Far East + Chukotka
   mongolia:               countryFeat([496]),
   japan:                  countryFeat([392]),
   afghanistan:            countryFeat([4]),
