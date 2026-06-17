@@ -80,99 +80,140 @@ function bbox(lonMin, lonMax, latMin, latMax) {
 }
 
 // ---------------------------------------------------------------------------
-// Territory composition
-// Each entry is either an array of ISO numeric codes OR a GeoJSON Feature (bbox).
+// mergeFeats — combine bbox + country features into one MultiPolygon feature
+// ---------------------------------------------------------------------------
+
+function mergeFeats(features) {
+  const valid = features.filter(Boolean);
+  if (valid.length === 0) return null;
+  if (valid.length === 1) return valid[0];
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'MultiPolygon',
+      coordinates: valid.flatMap(f => {
+        const g = f.geometry;
+        if (!g) return [];
+        if (g.type === 'Polygon') return [g.coordinates];
+        if (g.type === 'MultiPolygon') return g.coordinates;
+        return [];
+      }),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Centroid overrides (lon, lat) — used when geographic centroid is off-land
+// or inside a "hole" left by the land clip.
+// ---------------------------------------------------------------------------
+
+const CENTROID_OVERRIDE = {
+  // Russia sub-territories — bbox midpoints land in open ocean/tundra
+  ural:                  [62,  57],   // Russian Ural heartland
+  siberia:               [82,  60],   // W Siberian plain
+  irkutsk:               [108, 54],   // Lake Baikal region
+  yakutsk:               [127, 66],   // Yakutia
+  kamchatka:             [160, 60],   // Kamchatka peninsula
+  // Canada sub-territories
+  alaska:                [-153, 63],
+  'northwest-territory': [-95,  68],
+  alberta:               [-115, 54],
+  ontario:               [-85,  50],
+  quebec:                [-71,  52],
+  'western-us':          [-112, 39],
+  'eastern-us':          [-80,  38],
+  // Australia sub-territories
+  'western-australia':   [122, -26],
+  'eastern-australia':   [146, -32],
+};
+
+// ---------------------------------------------------------------------------
+// Territory composition — every country in the dataset is assigned exactly once
+// (except Antarctica, Falklands, and bbox-handled Russia/USA/Canada/Australia).
 // ---------------------------------------------------------------------------
 
 const COMPOSITION = {
   // ── North America ──────────────────────────────────────────────────────────
-  // All sub-national bboxes are defined to be strictly non-overlapping.
-  // Alaska west of the 141°W border; lat 55–72 captures interior + peninsula.
   alaska:                 bbox(-180, -141, 55, 72),
-  // NW Territory: all of northern Canada above 60°N, coast to coast.
   'northwest-territory':  bbox(-141, -52, 60, 84),
   greenland:              countryFeat([304]),
-  // Alberta: BC + Alberta + SK + MB (south of NW Territory, west of 100°W).
   alberta:                bbox(-141, -100, 49, 60),
-  // Ontario: central Canada south of NW Territory (100°W–76°W).
   ontario:                bbox(-100, -76, 42, 60),
-  // Quebec: eastern Canada south of NW Territory (76°W–52°W).
   quebec:                 bbox(-76, -52, 44, 60),
   'western-us':           bbox(-125, -100, 24, 49),
   'eastern-us':           bbox(-100, -67, 24, 47),
-  // Mexico + Central America + Caribbean
+  // Mexico + Central America + Caribbean (incl. Bahamas 44, T&T 780, Jamaica 388)
   'central-america':      countryFeat([484, 320, 84, 340, 222, 558, 188, 591,
-                                       192, 332, 214, 630, 388, 780, 388]),
+                                       192, 332, 214, 630, 388, 780, 44]),
 
   // ── South America ─────────────────────────────────────────────────────────
-  // Venezuela territory covers northern SA + Caribbean coast
   venezuela:              countryFeat([862, 170, 328, 740, 260]),
   brazil:                 countryFeat([76]),
-  // Peru territory covers western/central SA
   peru:                   countryFeat([604, 218, 68]),
-  // Argentina covers southern SA
   argentina:              countryFeat([32, 152, 858, 600]),
 
   // ── Europe ────────────────────────────────────────────────────────────────
   iceland:                countryFeat([352]),
-  // Great Britain covers UK + Ireland
   'great-britain':        countryFeat([826, 372]),
-  // Scandinavia: Norway, Sweden, Finland, Denmark
   scandinavia:            countryFeat([578, 752, 246, 208]),
-  // Northern Europe: Germany, Poland, Czech Republic, Slovakia
-  'northern-europe':      countryFeat([276, 616, 203, 703]),
-  // Western Europe: France, Netherlands, Belgium, Luxembourg
-  'western-europe':       countryFeat([250, 528, 56, 442]),
-  // Southern Europe: Spain, Portugal, Italy, Greece, Turkey, Balkans
-  'southern-europe':      countryFeat([724, 620, 380, 300, 100, 688, 191, 705,
-                                       807, 8, 70, 499, 792]),
-  // Ukraine covers eastern Europe: Ukraine, Belarus, Romania, Moldova,
-  // Hungary, Lithuania, Latvia, Estonia
-  ukraine:                countryFeat([804, 112, 642, 498, 348, 440, 428, 233]),
+  // Northern Europe: Germany, Poland, Czech Rep., Slovakia, Austria, Switzerland
+  'northern-europe':      countryFeat([276, 616, 203, 703, 40, 756]),
+  // Western Europe: France, Spain, Portugal, Netherlands, Belgium, Luxembourg
+  'western-europe':       countryFeat([250, 724, 620, 528, 56, 442]),
+  // Southern Europe: Italy, Greece, Balkans, Turkey (Turkey in SE in classic Risk)
+  'southern-europe':      countryFeat([380, 300, 100, 688, 191, 705,
+                                       807, 8, 70, 499, 792, 196]),
+  // Ukraine: Ukraine, Belarus, Romania, Moldova, Hungary, Baltics,
+  //          + Caucasus (Georgia 268, Armenia 51, Azerbaijan 31)
+  ukraine:                countryFeat([804, 112, 642, 498, 348, 440, 428, 233,
+                                       268, 51, 31]),
 
   // ── Africa ────────────────────────────────────────────────────────────────
-  // North Africa: Morocco, Algeria, Tunisia, Libya, Mauritania, Mali, Niger
-  'north-africa':         countryFeat([504, 12, 788, 434, 478, 466, 562, 686]),
+  // North Africa: Maghreb + West Africa + W. Sahara
+  'north-africa':         countryFeat([504, 12, 788, 434, 478, 466, 562, 686,
+                                       566, 288, 384, 854, 204, 768, 324, 624,
+                                       694, 430, 270, 732]),
   egypt:                  countryFeat([818]),
-  // East Africa: Sudan, Ethiopia, Somalia, Kenya, Uganda, Tanzania, Rwanda, Burundi, Djibouti, Eritrea, Chad
-  'east-africa':          countryFeat([729, 728, 231, 706, 404, 800, 834, 646, 108, 262, 232, 148]),
-  // Congo territory: DRC, Rep. Congo, Gabon, Cameroon, Central African Republic, Eq. Guinea
+  // East Africa (Sudan → Tanzania corridor, incl. Chad which bridges to N Africa)
+  'east-africa':          countryFeat([729, 728, 231, 706, 404, 800, 834,
+                                       646, 108, 262, 232, 148]),
+  // Congo: DRC, Rep. Congo, Gabon, Cameroon, CAR, Eq. Guinea
   congo:                  countryFeat([180, 178, 266, 120, 140, 226]),
-  // South Africa: RSA, Namibia, Botswana, Zambia, Zimbabwe, Mozambique,
-  //               Malawi, Eswatini, Lesotho, Angola
   'south-africa':         countryFeat([710, 516, 72, 894, 716, 508, 454, 748, 426, 24]),
   madagascar:             countryFeat([450]),
 
-  // ── Asia — Russia split into 5 strictly non-overlapping bounding boxes ──────
-  // Boundaries: Ural | 70 | Siberia | 105 | Irkutsk+Yakutsk | 140 | Kamchatka
-  //             Irkutsk lat 50–62; Yakutsk lat 62–76 (same lon range 105–140)
-  ural:                   bbox(55,  70,  52, 76),   // Ural Mts → 70°E
-  siberia:                bbox(70,  105, 52, 76),   // W Siberia 70°E–105°E
-  irkutsk:                bbox(105, 140, 50, 62),   // S-central, Baikal, lat 50–62
-  yakutsk:                bbox(105, 140, 62, 76),   // N Siberia / Yakutia, lat 62–76
-  kamchatka:              bbox(140, 180, 48, 76),   // Far East + Chukotka
-  mongolia:               countryFeat([496]),
-  japan:                  countryFeat([392]),
-  afghanistan:            countryFeat([4]),
-  // China includes Taiwan
+  // ── Asia — Russia split into 5 strictly non-overlapping bboxes ────────────
+  // ural bbox + Kazakhstan (398) + Uzbekistan (860) + Turkmenistan (795)
+  ural:     mergeFeats([bbox(55, 70, 52, 76), countryFeat([398, 860, 795])]),
+  siberia:                bbox(70,  105, 52, 76),
+  irkutsk:                bbox(105, 140, 50, 62),
+  yakutsk:                bbox(105, 140, 62, 76),
+  kamchatka:              bbox(140, 180, 48, 76),
+  // Mongolia + North Korea (408) — adjacent in Risk
+  mongolia:               countryFeat([496, 408]),
+  // Japan + South Korea (410)
+  japan:                  countryFeat([392, 410]),
+  // Afghanistan + Pakistan (586) + Tajikistan (762) + Kyrgyzstan (417)
+  afghanistan:            countryFeat([4, 586, 762, 417]),
+  // China + Taiwan (158)
   china:                  countryFeat([156, 158]),
-  // Middle East: Saudi Arabia, Iraq, Syria, Iran, Yemen, Oman, Jordan,
-  //              Lebanon, Israel, Kuwait, UAE, Qatar, Bahrain, Palestine
+  // Middle East: core Arab world + Iran + Cyprus (196)
   'middle-east':          countryFeat([682, 368, 760, 364, 887, 512, 400,
                                        422, 376, 414, 784, 634, 48, 275]),
-  // India territory: India, Sri Lanka, Nepal, Bhutan, Bangladesh
   india:                  countryFeat([356, 144, 524, 64, 50]),
-  // Siam: Thailand, Myanmar, Cambodia, Laos, Vietnam, Malaysia
-  siam:                   countryFeat([764, 104, 116, 418, 704, 458]),
+  // Siam: SE Asia + Philippines (608) + Brunei (96)
+  siam:                   countryFeat([764, 104, 116, 418, 704, 458, 608, 96]),
 
   // ── Australia ─────────────────────────────────────────────────────────────
-  // Indonesia includes East Timor; use official IDs
+  // Indonesia + Timor-Leste (626)
   indonesia:              countryFeat([360, 626]),
-  'new-guinea':           countryFeat([598]),
-  // Western Australia is roughly west of 129°E
+  // New Guinea + Pacific islands near it
+  'new-guinea':           countryFeat([598, 90, 548]),
   'western-australia':    bbox(112, 129, -45, -14),
-  // Eastern Australia covers the rest of the continent + Tasmania
-  'eastern-australia':    bbox(129, 155, -45, -10),
+  // Eastern Australia + New Zealand (554) + New Caledonia (540) + Fiji (242)
+  'eastern-australia':    mergeFeats([bbox(129, 155, -45, -10),
+                                      countryFeat([554, 540, 242])]),
 };
 
 // ---------------------------------------------------------------------------
@@ -202,11 +243,10 @@ for (const [id, feat] of Object.entries(COMPOSITION)) {
   const d = pathGen(feat);
   if (!d) { missing.push(id); continue; }
   paths[id] = d;
-  // For bbox features, use the stored midpoint; for country features, use geoCentroid.
-  // pathGen.centroid() is unreliable near the antimeridian; geoCentroid() has winding
-  // issues for rectangular bbox polygons.
+  // Priority: explicit override → bbox _center property → geoCentroid.
+  const override = CENTROID_OVERRIDE[id];
   const precomputed = feat.properties?._center;
-  const gc = precomputed ?? d3geo.geoCentroid(feat);
+  const gc = override ?? precomputed ?? d3geo.geoCentroid(feat);
   const c = projection(gc);
   if (!c || isNaN(c[0]) || isNaN(c[1])) {
     centroids[id] = { x: MAP_W / 2, y: MAP_H / 2 };
