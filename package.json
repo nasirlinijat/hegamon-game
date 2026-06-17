@@ -6,13 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:map": "node scripts/build-map.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^4.7.0",
+    "d3-geo": "^3.1.1",
+    "topojson-client": "^3.1.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.5"
