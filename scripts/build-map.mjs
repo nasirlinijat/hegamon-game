@@ -54,24 +54,27 @@ function countryFeat(ids) {
 }
 
 /**
- * Geographic bounding box as a GeoJSON Polygon (interpolated for smoother curves
- * after projection). Handles boxes that cross the antimeridian split at 168°E
- * (the projection is rotated [-12,0] so the cut is at 168°E/~192°E in rotated space).
+ * Geographic bounding box as a GeoJSON Polygon. The ring is wound
+ * counterclockwise (GeoJSON exterior convention) so d3-geo treats the interior
+ * as the small area inside the box, not the rest of the globe.
+ * The `_center` property is stored for centroid projection (geoCentroid() is
+ * unreliable for bbox polygons near the antimeridian or poles).
  */
 function bbox(lonMin, lonMax, latMin, latMax) {
   const pts = 16;
   const dl = (lonMax - lonMin) / pts;
   const da = (latMax - latMin) / pts;
+  // CCW: bottom-left → top-left → top-right → bottom-right → close
   const coords = [
-    ...Array.from({ length: pts }, (_, i) => [lonMin + dl * i, latMin]),
-    ...Array.from({ length: pts }, (_, i) => [lonMax, latMin + da * i]),
-    ...Array.from({ length: pts }, (_, i) => [lonMax - dl * i, latMax]),
-    ...Array.from({ length: pts }, (_, i) => [lonMin, latMax - da * i]),
+    ...Array.from({ length: pts }, (_, i) => [lonMin, latMin + da * i]),
+    ...Array.from({ length: pts }, (_, i) => [lonMin + dl * i, latMax]),
+    ...Array.from({ length: pts }, (_, i) => [lonMax, latMax - da * i]),
+    ...Array.from({ length: pts }, (_, i) => [lonMax - dl * i, latMin]),
     [lonMin, latMin],
   ];
   return {
     type: 'Feature',
-    properties: {},
+    properties: { _center: [(lonMin + lonMax) / 2, (latMin + latMax) / 2] },
     geometry: { type: 'Polygon', coordinates: [coords] },
   };
 }
@@ -201,9 +204,13 @@ for (const [id, feat] of Object.entries(COMPOSITION)) {
   const d = pathGen(feat);
   if (!d) { missing.push(id); continue; }
   paths[id] = d;
-  const c = pathGen.centroid(feat);
-  if (isNaN(c[0]) || isNaN(c[1])) {
-    // Fall back to bbox centroid for problematic features
+  // For bbox features, use the stored midpoint; for country features, use geoCentroid.
+  // pathGen.centroid() is unreliable near the antimeridian; geoCentroid() has winding
+  // issues for rectangular bbox polygons.
+  const precomputed = feat.properties?._center;
+  const gc = precomputed ?? d3geo.geoCentroid(feat);
+  const c = projection(gc);
+  if (!c || isNaN(c[0]) || isNaN(c[1])) {
     centroids[id] = { x: MAP_W / 2, y: MAP_H / 2 };
   } else {
     centroids[id] = { x: Math.round(c[0] * 10) / 10, y: Math.round(c[1] * 10) / 10 };
