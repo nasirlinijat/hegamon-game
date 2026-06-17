@@ -6,6 +6,7 @@ import {
   attackDiceCount,
   connectedThroughOwned,
   defenseDiceCount,
+  resolveBlitz,
   resolveCombat,
   validateAttack,
   validateFortify,
@@ -66,6 +67,7 @@ export function App() {
   const [lastCombat, setLastCombat] = useState<CombatResult | null>(null);
   const [combatSeq, setCombatSeq]   = useState(0);
   const [aiRunning, setAiRunning]   = useState(false);
+  const [blitzMode, setBlitzMode]   = useState(false);
 
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -93,6 +95,40 @@ export function App() {
   }
   const showCombatRef = useRef(showCombat);
   showCombatRef.current = showCombat;
+
+  function runBlitz(from: TerritoryId, to: TerritoryId) {
+    const s = stateRef.current;
+    const result = resolveBlitz(s, from, to, () => Math.random());
+    const { rounds, state: finalState } = result;
+    if (rounds.length === 0) return;
+    const attacker = s.players[s.turnPointer]?.id ?? HUMAN_ID;
+    let i = 0;
+    function showNext() {
+      const round = rounds[i]!;
+      setLastCombat({
+        from, to, attacker,
+        defender: s.owner[to],
+        attackerRolls: round.attackerRolls,
+        defenderRolls: round.defenderRolls,
+        attackerLosses: round.attackerLosses,
+        defenderLosses: round.defenderLosses,
+        captured: round.captured,
+      });
+      setCombatSeq((n) => n + 1);
+      i++;
+      if (i < rounds.length) {
+        setTimeout(showNext, 420);
+      } else {
+        setTimeout(() => {
+          setState(finalState);
+          setSelected(null);
+          setSelectedCards([]);
+        }, 620);
+      }
+    }
+    setSelected(null);
+    showNext();
+  }
 
   const isHumanTurn = state.players[state.turnPointer]?.id === HUMAN_ID;
 
@@ -154,6 +190,10 @@ export function App() {
         setSelected(null);
       } else if (state.owner[id] !== HUMAN_ID) {
         if (!validateAttack(state, selected, id).ok) return;
+        if (blitzMode) {
+          runBlitz(selected, id);
+          return;
+        }
         const fromArmies = state.armies[selected] ?? 0;
         const toArmies   = state.armies[id] ?? 0;
         const attackerRolls = rollDice(attackDiceCount(fromArmies), Math.random);
@@ -283,6 +323,8 @@ export function App() {
         aiRunning={aiRunning}
         selected={selected}
         onEndPhase={onEndPhase}
+        blitzMode={blitzMode}
+        onToggleBlitz={() => setBlitzMode((b) => !b)}
       />
 
       <CornerControls

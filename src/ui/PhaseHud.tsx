@@ -7,6 +7,8 @@ interface Props {
   aiRunning: boolean;
   selected: string | null;
   onEndPhase: () => void;
+  blitzMode?: boolean;
+  onToggleBlitz?: () => void;
 }
 
 const PHASE_META: Record<string, { label: string; color: string }> = {
@@ -16,7 +18,7 @@ const PHASE_META: Record<string, { label: string; color: string }> = {
   fortify:   { label: 'FORTIFY',   color: '#4a9e5c' },
 };
 
-export function PhaseHud({ state, isHumanTurn, aiRunning, selected, onEndPhase }: Props) {
+export function PhaseHud({ state, isHumanTurn, aiRunning, selected, onEndPhase, blitzMode, onToggleBlitz }: Props) {
   const current = state.players[state.turnPointer];
   if (!current) return null;
 
@@ -52,6 +54,24 @@ export function PhaseHud({ state, isHumanTurn, aiRunning, selected, onEndPhase }
         }}>{meta.label}</span>
         <span style={{ fontSize: 12, color: '#b0bec8', maxWidth: 240 }}>{hint}</span>
       </div>
+      {isHumanTurn && state.winner === null && phase === 'attack' && onToggleBlitz && (
+        <button
+          onClick={onToggleBlitz}
+          title="Blitz: automatically repeat attacks until capture or attacker can't continue"
+          style={{
+            marginLeft: 8,
+            background: blitzMode ? '#c0392b' : 'rgba(192,57,43,0.18)',
+            color: blitzMode ? '#fff' : '#e07060',
+            border: `1.5px solid ${blitzMode ? '#e05545' : 'rgba(192,57,43,0.4)'}`,
+            borderRadius: 8,
+            padding: '6px 14px', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+            transition: 'background .12s, color .12s',
+          }}
+        >
+          ⚡ {blitzMode ? 'BLITZ ON' : 'Blitz'}
+        </button>
+      )}
       {isHumanTurn && state.winner === null && phase !== 'setup' && (
         <button
           onClick={onEndPhase}
