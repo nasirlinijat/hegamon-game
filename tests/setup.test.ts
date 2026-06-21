@@ -225,6 +225,18 @@ describe('setup — auto-deploy (setupMode: auto)', () => {
     const s = createInitialState(['A', 'B'], { setup: true, config: AUTO });
     expect(ALL_TERRITORY_IDS.every((id) => (s.armies[id] ?? 0) >= 1)).toBe(true);
   });
+
+  it('scatters randomly: counts vary across territories and respect the per-territory cap (≤8)', () => {
+    // Seeded LCG rng so the random scatter is deterministic for the assertion.
+    let seed = 12345;
+    const rng = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+    const s = createInitialState(['A', 'B'], { setup: true, config: AUTO, rng });
+    const counts = ALL_TERRITORY_IDS.filter((id) => s.owner[id] === 'A').map((id) => s.armies[id]!);
+    expect(Math.min(...counts)).toBeGreaterThanOrEqual(1);
+    expect(Math.max(...counts)).toBeLessThanOrEqual(8);  // capped
+    expect(new Set(counts).size).toBeGreaterThan(1);     // not a flat, even spread
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(STARTING_ARMIES[2]); // full pool placed
+  });
 });
 
 describe('setup — opt-out (legacy default unchanged)', () => {

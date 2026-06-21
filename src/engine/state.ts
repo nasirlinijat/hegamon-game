@@ -301,20 +301,27 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
   if (setup) {
     const starting = startingArmiesForMap(playerIds.length, allIds.length);
 
-    // Auto-deploy: spread each player's starting pool across their own territories (each already
-    // holds 1 from the deal), then begin the normal turn cycle — no manual setup placement.
+    // Auto-deploy: scatter each player's starting pool RANDOMLY across their territories (each holds
+    // 1 from the deal). Extra armies land on random territories so some stay thin while others stack
+    // up — capped per territory so no single province hoards the whole pool. Then begin normal play.
     if (config.setupMode === 'auto') {
+      const MAX_PER_TERRITORY = 8; // ceiling on a single auto-deployed stack (incl. the base army)
       for (const pid of allPlayerIds) {
         if (pid === NEUTRAL_ID || pid === ZOMBIE_ID) continue;
-        const owned = shuffleArray(allIds.filter((id) => owner[id] === pid), rng);
+        const owned = allIds.filter((id) => owner[id] === pid);
         if (owned.length === 0) continue;
-        let extra = starting - owned.length; // owned.length armies already placed (1 each)
-        let i = 0;
-        while (extra > 0) {
-          const t = owned[i % owned.length]!;
+        let extra = starting - owned.length; // armies still to scatter (1 already on each territory)
+        // Random scatter, respecting the per-territory cap.
+        let guard = 0;
+        while (extra > 0 && guard++ < extra * 200) {
+          const t = owned[Math.floor(rng() * owned.length)]!;
+          if ((armies[t] ?? 0) >= MAX_PER_TERRITORY) continue;
           armies[t] = (armies[t] ?? 0) + 1;
-          extra--; i++;
+          extra--;
         }
+        // Fallback (cap saturated): dump any remainder round-robin so the full pool is always placed.
+        let i = 0;
+        while (extra > 0) { const t = owned[i % owned.length]!; armies[t] = (armies[t] ?? 0) + 1; extra--; i++; }
       }
       return {
         ...common,
