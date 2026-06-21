@@ -193,6 +193,36 @@ describe('setup — AI placement', () => {
   });
 });
 
+describe('setup — auto-deploy (setupMode: auto)', () => {
+  const AUTO: GameConfig = { ...DEFAULT_CONFIG, setupMode: 'auto' };
+
+  it('spreads starting armies and skips setup, entering reinforce directly', () => {
+    const s = createInitialState(['A', 'B', 'C'], { setup: true, config: AUTO });
+    expect(s.phase).toBe('reinforce');
+    expect(s.setupRemaining).toEqual({});
+    expect(s.turnPointer).toBe(0);
+    expect(s.reinforcementsRemaining).toBeGreaterThanOrEqual(3);
+  });
+
+  it('each player holds their full starting allotment, distributed (not all 1s)', () => {
+    for (const n of [2, 3, 4, 5, 6]) {
+      const ids = Array.from({ length: n }, (_, i) => `P${i}`);
+      const s = createInitialState(ids, { setup: true, config: AUTO });
+      for (const pid of ids) {
+        expect(armiesOf(s, pid)).toBe(STARTING_ARMIES[n]);
+      }
+      expect(totalArmies(s)).toBe(STARTING_ARMIES[n]! * n);
+      // With more armies than territories, at least some territory holds > 1 army.
+      expect(ALL_TERRITORY_IDS.some((id) => (s.armies[id] ?? 0) > 1)).toBe(true);
+    }
+  });
+
+  it('every territory keeps at least 1 army (no empty owned territory)', () => {
+    const s = createInitialState(['A', 'B'], { setup: true, config: AUTO });
+    expect(ALL_TERRITORY_IDS.every((id) => (s.armies[id] ?? 0) >= 1)).toBe(true);
+  });
+});
+
 describe('setup — opt-out (legacy default unchanged)', () => {
   it('without setup, boots straight into reinforce with flat armies', () => {
     const s = createInitialState(['A', 'B']);

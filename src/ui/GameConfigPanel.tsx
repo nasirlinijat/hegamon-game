@@ -8,7 +8,7 @@ import { useState } from 'react';
 import {
   MODES, DEFAULT_CONFIG,
   type GameConfig, type CardBonusMode, type AiDifficulty,
-  type PlacementMode, type DiceMode, type GameMode, type TeamsMode, type MapId,
+  type PlacementMode, type SetupMode, type DiceMode, type GameMode, type TeamsMode, type MapId,
 } from '../engine/modes';
 import { MAP_OPTIONS, getMap } from '../engine/map-registry';
 import { MapThumbnail } from './MapThumbnail';
@@ -130,6 +130,7 @@ export interface ConfigState {
   aiDifficulty: AiDifficulty;
   cardBonus: CardBonusMode;
   placement: PlacementMode;
+  setupMode: SetupMode;
   fogOfWar: boolean;
   dice: DiceMode;
   teams: TeamsMode;
@@ -145,6 +146,7 @@ export function useConfigState(initial?: Partial<ConfigState>): [ConfigState, Re
     aiDifficulty: initial?.aiDifficulty ?? DEFAULT_CONFIG.aiDifficulty,
     cardBonus:    initial?.cardBonus    ?? DEFAULT_CONFIG.cardBonus,
     placement:    initial?.placement    ?? DEFAULT_CONFIG.placement,
+    setupMode:    initial?.setupMode    ?? (DEFAULT_CONFIG.setupMode ?? 'manual'),
     fogOfWar:     initial?.fogOfWar     ?? DEFAULT_CONFIG.fogOfWar,
     dice:         initial?.dice         ?? DEFAULT_CONFIG.dice,
     teams:        initial?.teams        ?? DEFAULT_CONFIG.teams,
@@ -163,6 +165,7 @@ export function buildConfig(cs: ConfigState, numOpponents: number): GameConfig {
     aiDifficulty: cs.aiDifficulty,
     cardBonus: cs.cardBonus,
     placement: cs.placement,
+    setupMode: cs.setupMode,
     fogOfWar: cs.fogOfWar,
     dice: cs.dice,
     teams: cs.teams,
@@ -308,6 +311,19 @@ export function GameConfigPanel({ cs, setCs, numPlayers }: GameConfigPanelProps)
               title={CARD_BONUS_HINT[opt]}
               style={segStyle(cs.cardBonus === opt)}>
               {opt === 'none' ? 'None' : opt === 'fixed' ? 'Fixed' : opt === 'progressive' ? 'Progressive' : 'Nuclear'}
+            </button>
+          ))}
+        </SettingsRow>
+        <SettingsRow label="Army Setup">
+          {(['manual', 'auto'] as SetupMode[]).map(opt => (
+            <button key={opt}
+              className={`setup-seg${cs.setupMode === opt ? ' seg-active' : ''}`}
+              onClick={() => set('setupMode', opt)}
+              title={opt === 'manual'
+                ? 'Place your starting armies yourself, one territory at a time.'
+                : 'Starting armies are spread automatically across your territories — skips manual placement.'}
+              style={segStyle(cs.setupMode === opt)}>
+              {opt === 'manual' ? 'Manual' : 'Auto-spread'}
             </button>
           ))}
         </SettingsRow>

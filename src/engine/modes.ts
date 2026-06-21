@@ -47,6 +47,11 @@ export type CardBonusMode = 'none' | 'fixed' | 'progressive' | 'nuclear';
  *  the whole pool at once via a count picker (all starting armies on your first turn, and each
  *  round's reinforcements in one action). */
 export type PlacementMode = 'step' | 'batch';
+/** How starting armies are deployed at game start: 'manual' = each player places their
+ *  starting pool one territory at a time (the classic setup phase); 'auto' = the starting
+ *  pool is spread automatically across each player's territories, skipping setup and going
+ *  straight to the first reinforce turn. */
+export type SetupMode = 'manual' | 'auto';
 export type DiceMode = 'balanced' | 'random';
 export type AiDifficulty = 'easy' | 'normal' | 'hard';
 /** Team mode: 'off' = free-for-all; '2v2' = 4 players 2 teams; '3v3' = 6 players 2 teams. */
@@ -60,6 +65,8 @@ export interface GameConfig {
   readonly aiDifficulty: AiDifficulty;
   readonly cardBonus: CardBonusMode;
   readonly placement: PlacementMode;
+  /** How starting armies are deployed. Defaults to 'manual' when omitted. */
+  readonly setupMode?: SetupMode;
   readonly fogOfWar: boolean;
   readonly dice: DiceMode;
   readonly teams: TeamsMode;
@@ -79,6 +86,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   aiDifficulty: 'normal',
   cardBonus: 'progressive',
   placement: 'step',
+  setupMode: 'manual',
   fogOfWar: false,
   dice: 'random',
   teams: 'off',

@@ -286,9 +286,45 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
     ...(teamAssignments   ? { teamAssignments }   : {}),
   };
 
-  // --- Setup mode: players still have armies to place ---
+  // Compute the first player's opening reinforcement pool (territories/3 + continent bonuses).
+  const firstReinforcements = (): number => {
+    const firstTerritories = allIds.filter((id) => owner[id] === firstId);
+    const base = Math.max(3, Math.floor(firstTerritories.length / 3));
+    const continentBonus = Object.values(map.continents).reduce((sum, c) => {
+      const owns = c.territories.every((t) => owner[t] === firstId);
+      return sum + (owns ? c.bonus : 0);
+    }, 0);
+    return base + continentBonus;
+  };
+
+  // --- Setup mode: how the starting armies are deployed ---
   if (setup) {
     const starting = startingArmiesForMap(playerIds.length, allIds.length);
+
+    // Auto-deploy: spread each player's starting pool across their own territories (each already
+    // holds 1 from the deal), then begin the normal turn cycle — no manual setup placement.
+    if (config.setupMode === 'auto') {
+      for (const pid of allPlayerIds) {
+        if (pid === NEUTRAL_ID || pid === ZOMBIE_ID) continue;
+        const owned = shuffleArray(allIds.filter((id) => owner[id] === pid), rng);
+        if (owned.length === 0) continue;
+        let extra = starting - owned.length; // owned.length armies already placed (1 each)
+        let i = 0;
+        while (extra > 0) {
+          const t = owned[i % owned.length]!;
+          armies[t] = (armies[t] ?? 0) + 1;
+          extra--; i++;
+        }
+      }
+      return {
+        ...common,
+        phase: 'reinforce',
+        reinforcementsRemaining: firstReinforcements(),
+        setupRemaining: {},
+      };
+    }
+
+    // Manual deploy (default): players place their starting pool one territory at a time.
     const setupRemaining: Record<PlayerId, number> = {};
     for (const pid of allPlayerIds) {
       // Pseudo-players (Neutral, Zombies) place no armies; 0 remaining skips them automatically.
@@ -303,17 +339,10 @@ export function createInitialState(playerIds: PlayerId[], opts: InitOptions = {}
   }
 
   // --- Legacy mode: jump straight into the first player's reinforce phase ---
-  const firstTerritories = allIds.filter((id) => owner[id] === firstId);
-  const base = Math.max(3, Math.floor(firstTerritories.length / 3));
-  const continentBonus = Object.values(map.continents).reduce((sum, c) => {
-    const owns = c.territories.every((t) => owner[t] === firstId);
-    return sum + (owns ? c.bonus : 0);
-  }, 0);
-
   return {
     ...common,
     phase: 'reinforce',
-    reinforcementsRemaining: base + continentBonus,
+    reinforcementsRemaining: firstReinforcements(),
     setupRemaining: {},
   };
 }
