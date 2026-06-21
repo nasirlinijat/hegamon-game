@@ -39,6 +39,22 @@ export const CONTINENT_TINT: Record<ContinentId, string> = {
   ana: '#c2b96a', // khaki
   eg:  '#e08a4a', // orange
   naf: '#d8c0a0', // tan
+  // United Kingdom board
+  'uk-eng':  '#c0453d', // red
+  'uk-ire':  '#e0875a', // salmon
+  'uk-nire': '#6a7fd0', // blue
+  'uk-ssco': '#7fae5a', // green
+  'uk-wal':  '#a98a8a', // mauve
+  'uk-nsco': '#d8cf4a', // yellow
+  // The Storybook World board
+  emp: '#e0d24a', // yellow
+  alb: '#c64a44', // red
+  ard: '#9469b8', // purple
+  isl: '#8fc44a', // lime
+  mys: '#9a6b40', // brown
+  ima: '#d87a9e', // pink
+  wld: '#3f8a4a', // green
+  ast: '#e0a83a', // gold
 };
 
 // Sea bridges — dashed connectors between territory centroids that are adjacent (attackable) but

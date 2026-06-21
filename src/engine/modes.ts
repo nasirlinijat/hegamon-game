@@ -57,7 +57,7 @@ export type AiDifficulty = 'easy' | 'normal' | 'hard';
 /** Team mode: 'off' = free-for-all; '2v2' = 4 players 2 teams; '3v3' = 6 players 2 teams. */
 export type TeamsMode = 'off' | '2v2' | '3v3';
 /** Selectable board. 'classic'/'imperial' are real-world; the rest are imaginary boards. */
-export type MapId = 'classic' | 'imperial' | 'verdantia' | 'isles' | 'longmarch' | 'twincrowns' | 'aurelia' | 'europe';
+export type MapId = 'classic' | 'imperial' | 'verdantia' | 'isles' | 'longmarch' | 'twincrowns' | 'aurelia' | 'europe' | 'uk' | 'storybook';
 
 export interface GameConfig {
   readonly mode: GameMode;

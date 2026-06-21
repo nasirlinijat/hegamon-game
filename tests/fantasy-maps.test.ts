@@ -5,7 +5,7 @@ import { createInitialState, type GameState } from '../src/engine/state';
 import { DEFAULT_CONFIG, type MapId } from '../src/engine/modes';
 import { validateAttack, applyAttack, calcReinforcements } from '../src/engine/rules';
 
-const FANTASY: MapId[] = ['verdantia', 'isles', 'longmarch', 'twincrowns', 'aurelia', 'europe'];
+const FANTASY: MapId[] = ['verdantia', 'isles', 'longmarch', 'twincrowns', 'aurelia', 'europe', 'uk', 'storybook'];
 
 // Parse an SVG path into its sub-polygon rings.
 function rings(d: string): [number, number][][] {

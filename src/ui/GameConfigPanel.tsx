@@ -88,6 +88,25 @@ export function segStyle(active: boolean, accentColor?: string, disabled = false
   };
 }
 
+function CarouselArrow({ dir, disabled, onClick }: { dir: 'prev' | 'next'; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={dir === 'prev' ? 'Previous boards' : 'Next boards'}
+      style={{
+        width: 24, height: 24, borderRadius: 6, cursor: disabled ? 'default' : 'pointer',
+        background: disabled ? 'rgba(255,255,255,0.03)' : CC.goldFaint,
+        border: `1px solid ${disabled ? CC.borderDim : 'rgba(196,146,42,0.45)'}`,
+        color: disabled ? CC.textMuted : CC.goldBrt,
+        fontSize: 13, fontWeight: 800, lineHeight: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: disabled ? 0.5 : 1, transition: 'all .12s',
+      }}
+    >{dir === 'prev' ? '‹' : '›'}</button>
+  );
+}
+
 function ModeIconTile({ meta, selected, onClick }: {
   meta: { id: GameMode; label: string; blurb: string; implemented: boolean };
   selected: boolean;
@@ -195,6 +214,13 @@ export function GameConfigPanel({ cs, setCs, numPlayers }: GameConfigPanelProps)
 
   const selectedMode = MODES.find(m => m.id === cs.mode);
 
+  // Theater carousel: show 2 boards at a time, slide to see the rest.
+  const PER_PAGE = 2;
+  const pageCount = Math.ceil(MAP_OPTIONS.length / PER_PAGE);
+  const initialPage = Math.floor(Math.max(0, MAP_OPTIONS.findIndex(m => m.id === cs.mapId)) / PER_PAGE);
+  const [mapPage, setMapPage] = useState(initialPage);
+  const page = Math.min(mapPage, pageCount - 1);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* ── Game Mode ──────────────────────────────────────── */}
@@ -244,48 +270,60 @@ export function GameConfigPanel({ cs, setCs, numPlayers }: GameConfigPanelProps)
 
       <Divider mt={4} mb={18} />
 
-      {/* ── Theater ────────────────────────────────────────── */}
-      <SectionLabel>Theater</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 9, marginBottom: 20 }}>
-        {MAP_OPTIONS.map(m => {
-          const board = getMap(m.id);
-          const territories = board.allTerritoryIds.length;
-          const continents = Object.keys(board.continents).length;
-          const selected = cs.mapId === m.id;
-          return (
-            <button
-              key={m.id}
-              className={`setup-map${selected ? ' map-active' : ''}`}
-              onClick={() => set('mapId', m.id)}
-              style={{
-                display: 'flex', flexDirection: 'column', textAlign: 'left',
-                padding: 0, borderRadius: 10, cursor: 'pointer', overflow: 'hidden',
-                border: `1.5px solid ${selected ? 'rgba(196,146,42,0.6)' : CC.borderDim}`,
-                background: selected ? CC.goldFaint : 'rgba(255,255,255,0.025)',
-                transition: 'border-color .12s, background .12s', position: 'relative',
-              }}
-            >
-              <div style={{ width: '100%', flexShrink: 0 }}>
-                <MapThumbnail mapId={m.id} width={200} />
-              </div>
-              <div style={{
-                position: 'absolute', top: 8, right: 8,
-                width: 12, height: 12, borderRadius: '50%',
-                border: `1.5px solid ${selected ? CC.gold : 'rgba(255,255,255,0.25)'}`,
-                background: selected ? CC.gold : 'transparent', transition: 'all .12s',
-              }} />
-              <div style={{ padding: '9px 11px 11px' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: selected ? CC.goldBrt : CC.text, marginBottom: 2 }}>
-                  {m.name}
+      {/* ── Theater (sliding carousel — 2 boards per page) ─────── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+        <SectionLabel>Theater</SectionLabel>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CarouselArrow dir="prev" disabled={page === 0} onClick={() => setMapPage(p => Math.max(0, p - 1))} />
+          <span style={{ fontSize: 9, color: CC.textMuted, fontWeight: 700, letterSpacing: 1, minWidth: 34, textAlign: 'center' }}>
+            {page + 1}/{pageCount}
+          </span>
+          <CarouselArrow dir="next" disabled={page >= pageCount - 1} onClick={() => setMapPage(p => Math.min(pageCount - 1, p + 1))} />
+        </div>
+      </div>
+      <div style={{ overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ display: 'flex', transition: 'transform .28s ease', transform: `translateX(calc(-${page} * (100% + 9px)))` }}>
+          {MAP_OPTIONS.map(m => {
+            const board = getMap(m.id);
+            const territories = board.allTerritoryIds.length;
+            const continents = Object.keys(board.continents).length;
+            const selected = cs.mapId === m.id;
+            return (
+              <button
+                key={m.id}
+                className={`setup-map${selected ? ' map-active' : ''}`}
+                onClick={() => set('mapId', m.id)}
+                style={{
+                  flex: '0 0 calc((100% - 9px) / 2)', marginRight: 9,
+                  display: 'flex', flexDirection: 'column', textAlign: 'left',
+                  padding: 0, borderRadius: 10, cursor: 'pointer', overflow: 'hidden',
+                  border: `1.5px solid ${selected ? 'rgba(196,146,42,0.6)' : CC.borderDim}`,
+                  background: selected ? CC.goldFaint : 'rgba(255,255,255,0.025)',
+                  transition: 'border-color .12s, background .12s', position: 'relative',
+                }}
+              >
+                <div style={{ width: '100%', flexShrink: 0 }}>
+                  <MapThumbnail mapId={m.id} width={200} />
                 </div>
-                <div style={{ fontSize: 9.5, color: selected ? CC.gold : CC.textDim, marginBottom: 3 }}>
-                  {territories} territories · {continents} continents
+                <div style={{
+                  position: 'absolute', top: 8, right: 8,
+                  width: 12, height: 12, borderRadius: '50%',
+                  border: `1.5px solid ${selected ? CC.gold : 'rgba(255,255,255,0.25)'}`,
+                  background: selected ? CC.gold : 'transparent', transition: 'all .12s',
+                }} />
+                <div style={{ padding: '9px 11px 11px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: selected ? CC.goldBrt : CC.text, marginBottom: 2 }}>
+                    {m.name}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: selected ? CC.gold : CC.textDim, marginBottom: 3 }}>
+                    {territories} territories · {continents} continents
+                  </div>
+                  <div style={{ fontSize: 9.5, color: CC.textMuted, lineHeight: 1.4 }}>{m.blurb}</div>
                 </div>
-                <div style={{ fontSize: 9.5, color: CC.textMuted, lineHeight: 1.4 }}>{m.blurb}</div>
-              </div>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <Divider mb={18} />

@@ -239,6 +239,8 @@ export const LAND_PATH = ${JSON.stringify(landPath)};
 export { generate, roman };
 
 import { EUROPE_SPEC } from './europe-spec.mjs';
-const SPECS = [EUROPE_SPEC];
+import { UK_SPEC } from './uk-spec.mjs';
+import { STORYBOOK_SPEC } from './storybook-spec.mjs';
+const SPECS = [EUROPE_SPEC, UK_SPEC, STORYBOOK_SPEC];
 const only = process.argv[2];
 for (const spec of SPECS) if (!only || spec.id === only) generate(spec);

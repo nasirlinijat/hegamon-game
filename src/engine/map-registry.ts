@@ -11,6 +11,8 @@ import { LONGMARCH_MAP } from './longmarch-map';
 import { TWINCROWNS_MAP } from './twincrowns-map';
 import { AURELIA_MAP } from './aurelia-map';
 import { EUROPE_MAP } from './europe-map';
+import { UK_MAP } from './uk-map';
+import { STORYBOOK_MAP } from './storybook-map';
 
 export const MAPS: Record<MapId, GameMap> = {
   classic: CLASSIC_MAP,
@@ -21,6 +23,8 @@ export const MAPS: Record<MapId, GameMap> = {
   twincrowns: TWINCROWNS_MAP,
   aurelia: AURELIA_MAP,
   europe: EUROPE_MAP,
+  uk: UK_MAP,
+  storybook: STORYBOOK_MAP,
 };
 
 /** Resolve a board by id, defaulting to the classic 42-territory world. */
@@ -69,5 +73,15 @@ export const MAP_OPTIONS: { id: MapId; name: string; blurb: string }[] = [
     id: 'europe',
     name: 'Risk Europe',
     blurb: 'The grand campaign — 177 historical provinces across 18 realms, from Iceland to Arabia.',
+  },
+  {
+    id: 'uk',
+    name: 'United Kingdom',
+    blurb: 'Britain & Ireland — 42 counties across England, Ireland, Scotland and Wales.',
+  },
+  {
+    id: 'storybook',
+    name: 'The Storybook World',
+    blurb: 'An archipelago of legends — 54 realms from myth and fable, linked by perilous sea lanes.',
   },
 ];

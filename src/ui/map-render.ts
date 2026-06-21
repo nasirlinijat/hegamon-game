@@ -13,6 +13,8 @@ import { LONGMARCH_MAP } from '../engine/longmarch-map';
 import { TWINCROWNS_MAP } from '../engine/twincrowns-map';
 import { AURELIA_MAP } from '../engine/aurelia-map';
 import { EUROPE_MAP } from '../engine/europe-map';
+import { UK_MAP } from '../engine/uk-map';
+import { STORYBOOK_MAP } from '../engine/storybook-map';
 import * as classicGeo from './map-geometry';
 import * as imperialGeo from './map-geometry-imperial';
 import * as verdantiaGeo from './map-geometry-verdantia';
@@ -21,6 +23,8 @@ import * as longmarchGeo from './map-geometry-longmarch';
 import * as twincrownsGeo from './map-geometry-twincrowns';
 import * as aureliaGeo from './map-geometry-aurelia';
 import * as europeGeo from './map-geometry-europe';
+import * as ukGeo from './map-geometry-uk';
+import * as storybookGeo from './map-geometry-storybook';
 
 export interface Connector { x1: number; y1: number; x2: number; y2: number; c?: number }
 export interface WrapStub { from: TerritoryId; toEdge: number; label: string }
@@ -233,6 +237,8 @@ const AURELIA: MapRender    = build(aureliaGeo,    AURELIA_MAP,    FANTASY_TUNIN
 // Atlas board: positioned-seed Voronoi clipped to landmasses; touching provinces share borders, sea
 // routes get connectors. Larger canvas (2000×1480) so a slightly bigger gap threshold reads cleanly.
 const EUROPE: MapRender = build(europeGeo, EUROPE_MAP, { touchGrid: 2, gapThreshold: 6, sampleCap: 2400 });
+const UK: MapRender = build(ukGeo, UK_MAP, { touchGrid: 2, gapThreshold: 6, sampleCap: 2400 });
+const STORYBOOK: MapRender = build(storybookGeo, STORYBOOK_MAP, { touchGrid: 2, gapThreshold: 6, sampleCap: 2400 });
 
 export function getMapRender(mapId: string): MapRender {
   switch (mapId) {
@@ -243,6 +249,8 @@ export function getMapRender(mapId: string): MapRender {
     case 'twincrowns': return TWINCROWNS;
     case 'aurelia':    return AURELIA;
     case 'europe':     return EUROPE;
+    case 'uk':         return UK;
+    case 'storybook':  return STORYBOOK;
     default:           return CLASSIC;
   }
 }
