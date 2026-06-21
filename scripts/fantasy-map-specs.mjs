@@ -28,6 +28,24 @@ const NAMES = {
     'Castellan', 'Bastion', 'Highcrown', 'Emberthrone', 'Silvercrown', 'Dawnscepter', 'Garnet', 'Imperia',
     'Lordsreach', 'Mantlewood', 'Court', 'Heralds', 'Pendant', 'Bannermarch',
   ],
+  aurelia: [
+    // Heartmarch (hub)
+    'Aurelium', 'Solspire', 'Highmarch', 'Goldenfield', 'Meridian', 'Caelum', 'Lumengarde', 'Dawnhold', 'Radiant', 'Centra',
+    // Frostcrown
+    'Hoarfrost', 'Glaciem', 'Wintergate', 'Palebourne', 'Rimefell', 'Snowcrown', 'Frostmere', 'Icewatch',
+    // Stormhold
+    'Thunderpeak', 'Galehold', 'Tempest', 'Skyrend', 'Cloudbreak', 'Windspire', 'Stormwatch', 'Levin',
+    // Emberwastes
+    'Cinderreach', 'Ashfall', 'Emberdeep', 'Magmara', 'Scoria', 'Pyrewood', 'Charstead', 'Smolderfen', 'Brimstone',
+    // Sunreach
+    'Goldsand', 'Mirage', 'Sunfen', 'Amberdune', 'Helios', 'Warmshoal', 'Basking', 'Solace',
+    // Mirelands
+    'Boglight', 'Fenmoor', 'Murkwater', 'Reedhollow', 'Sloughmere', 'Marshgate', 'Damprook', 'Quagfen',
+    // Westvale (fortress)
+    'Wardvale', 'Stonewatch', 'Greyhold', 'Bulwark', 'Lastgate', 'Ironvale', 'Keepmoor', 'Sentinel',
+    // The Scattered Crowns (islands)
+    'Pearl Isle', 'Coral Crown', 'Saltspire', 'Tideglass', 'Halcyon Cay', 'Marlowe',
+  ],
 };
 
 export const SPECS = [
@@ -106,6 +124,55 @@ export const SPECS = [
     ],
     links: [
       ['NA', 'EU'], ['EU', 'AS'], ['NA', 'AF'], ['AF', 'AS'], ['EU', 'AF'],
+    ],
+  },
+
+  // 5. Aurelia — a grand 64-territory world: a central heartland (hub) inside a contested ring of
+  // islands, all encircled by six bordering realms. Hub spokes + an outer ring loop + the inner
+  // archipelago corridor give many routes, chokepoints, and a defensible western corner.
+  {
+    id: 'aurelia',
+    name: 'Aurelia',
+    blurb: 'A radiant world of eight realms — a golden heartland ringed by contested isles and six bordering lands.',
+    seed: 20260,
+    namePool: NAMES.aurelia,
+    continents: [
+      // Central hub — three capes unioned into one chunky landmass.
+      { key: 'AS', name: 'Heartmarch', bonus: 5, seeds: 10, blobs: [
+        { cx: 602, cy: 332, rx: 84, ry: 72, wobble: 0.13 },
+        { cx: 702, cy: 354, rx: 76, ry: 66, wobble: 0.13 },
+        { cx: 636, cy: 424, rx: 72, ry: 60, wobble: 0.13 },
+      ] },
+      // Six bordering realms in a hexagon.
+      { key: 'EEU', name: 'Frostcrown', bonus: 4, seeds: 8, blobs: [
+        { cx: 600, cy: 108, rx: 92, ry: 64, wobble: 0.18 }, { cx: 695, cy: 122, rx: 76, ry: 56, wobble: 0.18 } ] },
+      { key: 'WEU', name: 'Stormhold', bonus: 3, seeds: 8, blobs: [
+        { cx: 958, cy: 222, rx: 88, ry: 70, wobble: 0.18 }, { cx: 1028, cy: 270, rx: 66, ry: 54, wobble: 0.18 } ] },
+      { key: 'ME', name: 'Emberwastes', bonus: 4, seeds: 8, blobs: [
+        { cx: 958, cy: 498, rx: 88, ry: 72, wobble: 0.18 }, { cx: 1030, cy: 452, rx: 64, ry: 54, wobble: 0.18 } ] },
+      { key: 'OC', name: 'Sunreach', bonus: 3, seeds: 8, blobs: [
+        { cx: 600, cy: 612, rx: 92, ry: 60, wobble: 0.18 }, { cx: 700, cy: 600, rx: 76, ry: 54, wobble: 0.18 } ] },
+      { key: 'AF', name: 'Mirelands', bonus: 4, seeds: 8, blobs: [
+        { cx: 332, cy: 498, rx: 88, ry: 72, wobble: 0.18 }, { cx: 262, cy: 452, rx: 64, ry: 54, wobble: 0.18 } ] },
+      { key: 'NA', name: 'Westvale', bonus: 3, seeds: 8, blobs: [
+        { cx: 332, cy: 222, rx: 88, ry: 72, wobble: 0.18 }, { cx: 262, cy: 270, rx: 64, ry: 54, wobble: 0.18 } ] },
+      // Inner archipelago ring — six islands in the gaps between hub and outer realms.
+      { key: 'SA', name: 'The Scattered Crowns', bonus: 6, seedsPerBlob: true, seeds: 6, blobs: [
+        { cx: 822, cy: 360, rx: 32, ry: 30, wobble: 0.2 },
+        { cx: 726, cy: 200, rx: 32, ry: 28, wobble: 0.2 },
+        { cx: 548, cy: 200, rx: 32, ry: 28, wobble: 0.2 },
+        { cx: 452, cy: 360, rx: 32, ry: 30, wobble: 0.2 },
+        { cx: 548, cy: 520, rx: 32, ry: 28, wobble: 0.2 },
+        { cx: 726, cy: 520, rx: 32, ry: 28, wobble: 0.2 },
+      ] },
+    ],
+    links: [
+      // Hub spokes to three alternating realms.
+      ['AS', 'EEU'], ['AS', 'ME'], ['AS', 'AF'],
+      // Outer ring (hexagon loop).
+      ['EEU', 'WEU'], ['WEU', 'ME'], ['ME', 'OC'], ['OC', 'AF'], ['AF', 'NA'], ['NA', 'EEU'],
+      // Inner archipelago corridor — links the hub and the three realms without a direct spoke.
+      ['SA', 'AS'], ['SA', 'WEU'], ['SA', 'OC'], ['SA', 'NA'],
     ],
   },
 ];

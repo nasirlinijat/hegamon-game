@@ -107,38 +107,58 @@ function scatterSeeds(ring, count, rand) {
   return seeds;
 }
 
-// Clip a Voronoi cell (ring) to the blob; return the largest resulting outer ring or null.
-function clipCell(cell, blobRing) {
-  const res = polygonClipping.intersection([cell], [blobRing]);
+// A "land" is a MultiPolygon (array of [outerRing, ...holes]); continents may be one blob or a union
+// of several (peninsulas/capes) or a set of separate islands.
+function unionRings(rings) {
+  if (rings.length === 1) return [[rings[0]]];
+  try { return polygonClipping.union(...rings.map((r) => [r])); }
+  catch { return rings.map((r) => [r]); }
+}
+function pointInLand(p, land) { return land.some((poly) => pointInRing(p, poly[0])); }
+function landBBox(land) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const poly of land) for (const [x, y] of poly[0]) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+  return [minX, minY, maxX, maxY];
+}
+// Clip a Voronoi cell to the land MultiPolygon; return the largest resulting outer ring or null.
+function clipCell(cell, land) {
+  let res;
+  try { res = polygonClipping.intersection([cell], land); } catch { return null; }
   if (!res || res.length === 0) return null;
   let best = null, bestA = -1;
-  for (const poly of res) {
-    const outer = poly[0];
-    const a = polyArea(outer);
-    if (a > bestA) { bestA = a; best = outer; }
-  }
+  for (const poly of res) { const a = polyArea(poly[0]); if (a > bestA) { bestA = a; best = poly[0]; } }
   return best;
 }
+function scatterInLand(land, count, rand) {
+  const [minX, minY, maxX, maxY] = landBBox(land);
+  const seeds = []; let guard = 0;
+  while (seeds.length < count && guard++ < count * 600) {
+    const p = [minX + rand() * (maxX - minX), minY + rand() * (maxY - minY)];
+    if (pointInLand(p, land)) seeds.push(p);
+  }
+  return seeds;
+}
 
-// Tile a continent blob into `count` territory rings via relaxed Voronoi.
-function tileContinent(blobRing, count, rand) {
-  let seeds = scatterSeeds(blobRing, count, rand);
-  if (seeds.length < count) count = seeds.length;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const [x, y] of blobRing) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+// Tile a continent (one-or-more blobs unioned into `land`) into territory rings via relaxed Voronoi.
+// `seedsPerBlob` places exactly one seed at each blob's interior point — used for island groups so
+// each island becomes its own territory.
+function tileRegion(land, blobRings, count, rand, seedsPerBlob) {
+  let seeds = seedsPerBlob
+    ? blobRings.map((r) => { const lp = labelPoint(r); return [lp.x, lp.y]; })
+    : scatterInLand(land, count, rand);
+  if (seeds.length === 0) return [];
+  const [minX, minY, maxX, maxY] = landBBox(land);
   const bounds = [minX - 20, minY - 20, maxX + 20, maxY + 20];
 
-  // Lloyd relaxation for even cells.
-  for (let iter = 0; iter < 5; iter++) {
+  const relaxIters = seedsPerBlob ? 0 : 5;
+  for (let iter = 0; iter < relaxIters; iter++) {
     const vor = Delaunay.from(seeds).voronoi(bounds);
-    const next = [];
-    for (let i = 0; i < seeds.length; i++) {
+    seeds = seeds.map((s, i) => {
       const cell = vor.cellPolygon(i);
-      if (!cell) { next.push(seeds[i]); continue; }
-      const clipped = clipCell(cell.map(([x, y]) => [x, y]), blobRing);
-      next.push(clipped ? polyCentroid(clipped) : seeds[i]);
-    }
-    seeds = next;
+      if (!cell) return s;
+      const clipped = clipCell(cell.map(([x, y]) => [x, y]), land);
+      return clipped ? polyCentroid(clipped) : s;
+    });
   }
 
   const vor = Delaunay.from(seeds).voronoi(bounds);
@@ -146,7 +166,7 @@ function tileContinent(blobRing, count, rand) {
   for (let i = 0; i < seeds.length; i++) {
     const cell = vor.cellPolygon(i);
     if (!cell) continue;
-    const clipped = clipCell(cell.map(([x, y]) => [x, y]), blobRing);
+    const clipped = clipCell(cell.map(([x, y]) => [x, y]), land);
     if (clipped && polyArea(clipped) > 80) rings.push(clipped.map(([x, y]) => [round1(x), round1(y)]));
   }
   return rings;
@@ -182,9 +202,12 @@ function generate(spec) {
   const pool = (spec.namePool ?? []).slice();
   let poolIdx = 0;
   for (const c of spec.continents) {
-    const blobRing = blob(c.cx, c.cy, c.rx, c.ry, c.wobble ?? 0.16, rand);
-    blobs.push(blobRing);
-    const rings = tileContinent(blobRing, c.seeds, rand);
+    // A continent is one or more sub-blobs (peninsulas/capes/islands) unioned into one landmass.
+    const blobSpec = c.blobs ?? [{ cx: c.cx, cy: c.cy, rx: c.rx, ry: c.ry, wobble: c.wobble }];
+    const blobRings = blobSpec.map((b) => blob(b.cx, b.cy, b.rx, b.ry, b.wobble ?? 0.16, rand));
+    for (const r of blobRings) blobs.push(r);
+    const land = unionRings(blobRings);
+    const rings = tileRegion(land, blobRings, c.seeds, rand, c.seedsPerBlob === true);
     contTerr[c.key] = [];
     rings.forEach((ring, i) => {
       const id = `${c.key.toLowerCase()}-${i + 1}`;
@@ -203,6 +226,37 @@ function generate(spec) {
     const ids = contTerr[c.key];
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
       if (sharedCount(keysById[ids[i]], keysById[ids[j]]) >= 2) addEdge(ids[i], ids[j]);
+    }
+  }
+
+  // Intra-continent connectivity fix: island groups (and any split continent) get chained together
+  // by nearest territory pairs so every continent is internally connected (these render as sea routes).
+  const nearestPair = (idsA, idsB) => {
+    let best = null, bestD = Infinity;
+    for (const a of idsA) for (const b of idsB) {
+      let m = Infinity;
+      for (const pa of ringById[a]) for (const pb of ringById[b]) m = Math.min(m, dist(pa, pb));
+      if (m < bestD) { bestD = m; best = [a, b]; }
+    }
+    return best;
+  };
+  for (const c of spec.continents) {
+    const ids = contTerr[c.key];
+    let guard = 0;
+    while (guard++ < ids.length) {
+      // Components within this continent under current edges.
+      const comp = new Map();
+      const visit = (start, tag) => {
+        const st = [start]; comp.set(start, tag);
+        while (st.length) { const cur = st.pop(); for (const e of edges) { const [a, b] = e.split('|'); const n = a === cur ? b : b === cur ? a : null; if (n && ids.includes(n) && !comp.has(n)) { comp.set(n, tag); st.push(n); } } }
+      };
+      let tag = 0; for (const id of ids) if (!comp.has(id)) visit(id, tag++);
+      if (tag <= 1) break;
+      // Merge the two nearest components.
+      const groups = {}; for (const id of ids) (groups[comp.get(id)] ??= []).push(id);
+      const tags = Object.keys(groups);
+      const pair = nearestPair(groups[tags[0]], groups[tags[1]]);
+      if (pair) addEdge(pair[0], pair[1]); else break;
     }
   }
 
@@ -341,5 +395,7 @@ export const LAND_PATH = ${JSON.stringify(landPath)};
 }
 
 // ── map specs ──────────────────────────────────────────────────────────────────
+// Pass a map id to (re)generate only that board, e.g. `node scripts/build-fantasy-maps.mjs aurelia`.
 import { SPECS } from './fantasy-map-specs.mjs';
-for (const spec of SPECS) generate(spec);
+const only = process.argv[2];
+for (const spec of SPECS) if (!only || spec.id === only) generate(spec);

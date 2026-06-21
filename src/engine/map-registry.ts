@@ -9,6 +9,7 @@ import { VERDANTIA_MAP } from './verdantia-map';
 import { ISLES_MAP } from './isles-map';
 import { LONGMARCH_MAP } from './longmarch-map';
 import { TWINCROWNS_MAP } from './twincrowns-map';
+import { AURELIA_MAP } from './aurelia-map';
 
 export const MAPS: Record<MapId, GameMap> = {
   classic: CLASSIC_MAP,
@@ -17,6 +18,7 @@ export const MAPS: Record<MapId, GameMap> = {
   isles: ISLES_MAP,
   longmarch: LONGMARCH_MAP,
   twincrowns: TWINCROWNS_MAP,
+  aurelia: AURELIA_MAP,
 };
 
 /** Resolve a board by id, defaulting to the classic 42-territory world. */
@@ -55,5 +57,10 @@ export const MAP_OPTIONS: { id: MapId; name: string; blurb: string }[] = [
     id: 'twincrowns',
     name: 'Twin Crowns',
     blurb: 'Two mighty realms joined only at the northern and southern bridges.',
+  },
+  {
+    id: 'aurelia',
+    name: 'Aurelia',
+    blurb: 'A grand 64-realm world — a golden heartland inside a contested ring of isles, encircled by six lands.',
   },
 ];

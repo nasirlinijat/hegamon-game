@@ -11,12 +11,14 @@ import { VERDANTIA_MAP } from '../engine/verdantia-map';
 import { ISLES_MAP } from '../engine/isles-map';
 import { LONGMARCH_MAP } from '../engine/longmarch-map';
 import { TWINCROWNS_MAP } from '../engine/twincrowns-map';
+import { AURELIA_MAP } from '../engine/aurelia-map';
 import * as classicGeo from './map-geometry';
 import * as imperialGeo from './map-geometry-imperial';
 import * as verdantiaGeo from './map-geometry-verdantia';
 import * as islesGeo from './map-geometry-isles';
 import * as longmarchGeo from './map-geometry-longmarch';
 import * as twincrownsGeo from './map-geometry-twincrowns';
+import * as aureliaGeo from './map-geometry-aurelia';
 
 export interface Connector { x1: number; y1: number; x2: number; y2: number; c?: number }
 export interface WrapStub { from: TerritoryId; toEdge: number; label: string }
@@ -225,6 +227,7 @@ const VERDANTIA: MapRender  = build(verdantiaGeo,  VERDANTIA_MAP,  FANTASY_TUNIN
 const ISLES: MapRender      = build(islesGeo,      ISLES_MAP,      FANTASY_TUNING);
 const LONGMARCH: MapRender  = build(longmarchGeo,  LONGMARCH_MAP,  FANTASY_TUNING);
 const TWINCROWNS: MapRender = build(twincrownsGeo, TWINCROWNS_MAP, FANTASY_TUNING);
+const AURELIA: MapRender    = build(aureliaGeo,    AURELIA_MAP,    FANTASY_TUNING);
 
 export function getMapRender(mapId: string): MapRender {
   switch (mapId) {
@@ -233,6 +236,7 @@ export function getMapRender(mapId: string): MapRender {
     case 'isles':      return ISLES;
     case 'longmarch':  return LONGMARCH;
     case 'twincrowns': return TWINCROWNS;
+    case 'aurelia':    return AURELIA;
     default:           return CLASSIC;
   }
 }
