@@ -311,6 +311,15 @@ export function App() {
     return () => clearInterval(intervalId);
   }, [screen, isMyTurn, state.turnPointer, state.phase, state.winner]);
 
+  // ── Per-player turn stopwatch (counts up, resets when the turn passes) ──────
+  const [turnElapsed, setTurnElapsed] = useState(0);
+  useEffect(() => {
+    if (screen !== 'game' || state.winner !== null || state.phase === 'setup') { setTurnElapsed(0); return; }
+    setTurnElapsed(0);
+    const iv = setInterval(() => setTurnElapsed((t) => t + 1), 1000);
+    return () => clearInterval(iv);
+  }, [screen, state.turnPointer, state.winner, state.phase]);
+
   useEffect(() => {
     if (secondsLeft !== 0) return;
     if (!isMyTurn || screen !== 'game' || state.winner !== null || state.phase === 'setup') return;
@@ -578,7 +587,7 @@ export function App() {
         />
 
         <DicePanel result={lastCombat} seq={combatSeq} />
-        <Roster state={state} />
+        <Roster state={state} turnSeconds={turnElapsed} />
         <PhaseHud
           state={state}
           isHumanTurn={isMyTurn}
@@ -619,6 +628,7 @@ export function App() {
             winner={state.winner}
             mode={state.config.mode}
             playerColors={playerCtx.playerColors}
+            winnerName={playerCtx.playerNames[state.winner] ?? state.winner}
             {...(state.teamAssignments ? { teamAssignments: state.teamAssignments } : {})}
             onRestart={onRestart}
           />
@@ -644,9 +654,10 @@ const WIN_FLAVOR: Record<GameMode, { icon: string; text: string }> = {
 };
 
 function WinnerBanner({
-  winner, mode, teamAssignments, playerColors, onRestart,
+  winner, winnerName, mode, teamAssignments, playerColors, onRestart,
 }: {
   winner: PlayerId;
+  winnerName: string;
   mode: GameMode;
   teamAssignments?: Readonly<Record<PlayerId, string>>;
   playerColors: Record<string, string>;
@@ -655,7 +666,7 @@ function WinnerBanner({
   const color = playerColors[winner] ?? '#fff';
   const flavor = WIN_FLAVOR[mode] ?? WIN_FLAVOR.world;
   const teamName = teamAssignments?.[winner];
-  const label = teamName ? `Team ${teamName} wins!` : `${winner} wins!`;
+  const label = teamName ? `Team ${teamName} wins!` : `${winnerName} wins!`;
   return (
     <div style={{
       position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',

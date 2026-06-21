@@ -3,16 +3,23 @@ import { CONTINENTS } from '../engine/map';
 import type { GameState } from '../engine/state';
 import { usePlayer } from './PlayerContext';
 
-interface Props { state: GameState; }
+interface Props { state: GameState; turnSeconds?: number | null; }
 
-export const Roster = memo(function Roster({ state }: Props) {
-  const { playerColors } = usePlayer();
+function fmtClock(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+export const Roster = memo(function Roster({ state, turnSeconds }: Props) {
+  const { playerColors, playerNames } = usePlayer();
   const currentId = state.players[state.turnPointer]?.id;
 
   return (
     <div style={rosterWrap}>
       {state.players.map((player) => {
         const id      = player.id;
+        const name    = playerNames[id] ?? id;
         const color   = playerColors[id] ?? '#5a6272';
         const terrs   = Object.values(state.owner).filter((o) => o === id).length;
         const armies  = Object.entries(state.armies)
@@ -46,7 +53,7 @@ export const Roster = memo(function Roster({ state }: Props) {
                   animation: 'rosterPulse 2s ease-in-out infinite',
                 }} />
               )}
-              <PlayerAvatar color={color} id={id} alive={player.alive} />
+              <PlayerAvatar color={color} id={id} initial={name.charAt(0).toUpperCase()} alive={player.alive} />
             </div>
 
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -54,8 +61,8 @@ export const Roster = memo(function Roster({ state }: Props) {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <span style={{
                   fontWeight: 800, color, fontSize: 12, letterSpacing: 0.3,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{id}</span>
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 96,
+                }}>{name}</span>
 
                 {state.teamAssignments?.[id] && (() => {
                   const team = state.teamAssignments![id]!;
@@ -80,9 +87,16 @@ export const Roster = memo(function Roster({ state }: Props) {
 
                 {isCurrent && player.alive && (
                   <span style={{
-                    marginLeft: 'auto', color: '#C4922A',
-                    fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
-                  }}>● TURN</span>
+                    marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                  }}>
+                    {turnSeconds != null && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 800, color: '#cdd5e0',
+                        fontVariantNumeric: 'tabular-nums', letterSpacing: 0.3,
+                      }}>⏱ {fmtClock(turnSeconds)}</span>
+                    )}
+                    <span style={{ color: '#C4922A', fontSize: 9, fontWeight: 700, letterSpacing: 1.2 }}>● TURN</span>
+                  </span>
                 )}
               </div>
 
@@ -126,7 +140,7 @@ function StatDial({ label, value, color, prominent }: {
   );
 }
 
-function PlayerAvatar({ color, id, alive }: { color: string; id: string; alive: boolean }) {
+function PlayerAvatar({ color, id, initial, alive }: { color: string; id: string; initial: string; alive: boolean }) {
   const size = 34;
   const r    = size / 2;
   return (
@@ -147,7 +161,7 @@ function PlayerAvatar({ color, id, alive }: { color: string; id: string; alive: 
         textAnchor="middle" dominantBaseline="central"
         fontSize={size * 0.4} fontWeight={800} fill="#fff"
         fontFamily="system-ui, sans-serif" style={{ userSelect: 'none' }}
-      >{id.charAt(0).toUpperCase()}</text>
+      >{initial}</text>
     </svg>
   );
 }

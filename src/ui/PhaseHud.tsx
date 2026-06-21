@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import type { GameState } from '../engine/state';
-import { PLAYER_COLORS } from './App';
+import { usePlayer } from './PlayerContext';
 
 interface Props {
   state: GameState;
@@ -29,13 +29,15 @@ function fmtSeconds(sec: number): string {
 export const PhaseHud = memo(function PhaseHud({
   state, isHumanTurn, aiRunning, selected, onEndPhase, blitzMode, onToggleBlitz, secondsLeft,
 }: Props) {
+  const { playerColors, playerNames } = usePlayer();
   const current = state.players[state.turnPointer];
   if (!current) return null;
 
   const phase = state.phase;
   const meta  = PHASE_META[phase] ?? { label: phase.toUpperCase(), color: '#aaa' };
   const rem   = state.reinforcementsRemaining;
-  const color = PLAYER_COLORS[current.id] ?? '#5a6272';
+  const color = playerColors[current.id] ?? '#5a6272';
+  const name  = playerNames[current.id] ?? current.id;
 
   const canEnd = isHumanTurn && !state.mustTradeCards && (
     (phase === 'reinforce' && rem === 0) ||
@@ -55,7 +57,7 @@ export const PhaseHud = memo(function PhaseHud({
         : state.fortifiedThisTurn
           ? 'Fortified — end turn'
           : (selected ? 'Click a connected territory' : 'Move armies between territories')
-    : aiRunning ? `${current.id} is thinking…` : 'Waiting…';
+    : aiRunning ? `${name} is thinking…` : 'Waiting…';
 
   return (
     <>
@@ -70,7 +72,7 @@ export const PhaseHud = memo(function PhaseHud({
           ? '0 8px 44px rgba(0,0,0,0.7), 0 0 0 1px rgba(196,146,42,0.08)'
           : '0 8px 44px rgba(0,0,0,0.7)',
       }}>
-        <PlayerDisc color={color} id={current.id} />
+        <PlayerDisc color={color} id={current.id} initial={name.charAt(0).toUpperCase()} />
 
         {/* Phase label + player + hint */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
@@ -83,7 +85,7 @@ export const PhaseHud = memo(function PhaseHud({
               lineHeight: 1, whiteSpace: 'nowrap',
             }}>{meta.label}</span>
 
-            <span style={{ color, fontWeight: 700, fontSize: 13 }}>{current.id}</span>
+            <span style={{ color, fontWeight: 700, fontSize: 13 }}>{name}</span>
 
             {phase === 'reinforce' && rem > 0 && (
               <span style={{
@@ -160,7 +162,7 @@ export const PhaseHud = memo(function PhaseHud({
   );
 });
 
-function PlayerDisc({ color, id }: { color: string; id: string }) {
+function PlayerDisc({ color, id, initial }: { color: string; id: string; initial: string }) {
   const size = 40;
   const r = size / 2;
   return (
@@ -180,7 +182,7 @@ function PlayerDisc({ color, id }: { color: string; id: string }) {
         fontSize={size * 0.4} fontWeight={800}
         fill="#fff" fontFamily="system-ui, sans-serif"
         style={{ userSelect: 'none' }}
-      >{id.charAt(0).toUpperCase()}</text>
+      >{initial}</text>
     </svg>
   );
 }

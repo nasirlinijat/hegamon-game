@@ -14,8 +14,8 @@ const PIPS: Record<number, readonly [number, number][]> = {
 };
 
 function Die({ value, outcome }: { value: number; outcome: Outcome }) {
-  const SIZE = 40;
-  const PAD  = 9;
+  const SIZE = 28;
+  const PAD  = 6;
   const cell = (SIZE - 2 * PAD) / 2;
   const bg =
     outcome === 'win'     ? '#2a6e38'
@@ -28,9 +28,9 @@ function Die({ value, outcome }: { value: number; outcome: Outcome }) {
     : '#1a2030';
   return (
     <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ display: 'block' }}>
-      <rect x={1} y={1} width={SIZE - 2} height={SIZE - 2} rx={8} fill={bg} stroke={border} strokeWidth={1.5} />
+      <rect x={1} y={1} width={SIZE - 2} height={SIZE - 2} rx={6} fill={bg} stroke={border} strokeWidth={1.5} />
       {(PIPS[value] ?? []).map(([cx, cy], i) => (
-        <circle key={i} cx={PAD + cx * cell} cy={PAD + cy * cell} r={3.2} fill="rgba(255,255,255,0.88)" />
+        <circle key={i} cx={PAD + cx * cell} cy={PAD + cy * cell} r={2.3} fill="rgba(255,255,255,0.88)" />
       ))}
     </svg>
   );
@@ -68,10 +68,12 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
 
   if (!result) return null;
 
-  const { playerColors } = usePlayer();
+  const { playerColors, playerNames } = usePlayer();
   const { a, d, aOut, dOut } = computeOutcomes(result.attackerRolls, result.defenderRolls);
   const attColor = playerColors[result.attacker] ?? '#4a90d9';
   const defColor = playerColors[result.defender] ?? '#e05555';
+  const attName = playerNames[result.attacker] ?? result.attacker;
+  const defName = playerNames[result.defender] ?? result.defender;
 
   return (
     <div style={{
@@ -81,11 +83,11 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
         : 'rgba(255,255,255,0.09)',
     }}>
       <style>{KEYFRAMES}</style>
-      <div style={{ display: 'flex', alignItems: 'stretch', gap: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 12 }}>
         {/* Attacker */}
         <div style={{ textAlign: 'center' }}>
-          <DiceLabel color={attColor}>{result.attacker}</DiceLabel>
-          <div style={{ display: 'flex', gap: 5, justifyContent: 'center', minHeight: 40 }}>
+          <DiceLabel color={attColor}>{attName}</DiceLabel>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'center', minHeight: 28 }}>
             {a.map((v, i) => (
               <div key={i} style={{ animation: rolling ? 'shake .25s infinite' : 'none' }}>
                 <Die value={rolling ? (faces.att[i] ?? v) : v} outcome={rolling ? 'rolling' : aOut[i]!} />
@@ -94,12 +96,12 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
           </div>
         </div>
 
-        <div style={{ alignSelf: 'center', color: '#3D5068', fontWeight: 800, fontSize: 11, letterSpacing: 1.5 }}>VS</div>
+        <div style={{ alignSelf: 'center', color: '#3D5068', fontWeight: 800, fontSize: 9, letterSpacing: 1 }}>VS</div>
 
         {/* Defender */}
         <div style={{ textAlign: 'center' }}>
-          <DiceLabel color={defColor}>{result.defender}</DiceLabel>
-          <div style={{ display: 'flex', gap: 5, justifyContent: 'center', minHeight: 40 }}>
+          <DiceLabel color={defColor}>{defName}</DiceLabel>
+          <div style={{ display: 'flex', gap: 4, justifyContent: 'center', minHeight: 28 }}>
             {d.map((v, i) => (
               <div key={i} style={{ animation: rolling ? 'shake .25s infinite' : 'none' }}>
                 <Die value={rolling ? (faces.def[i] ?? v) : v} outcome={rolling ? 'rolling' : dOut[i]!} />
@@ -110,9 +112,9 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
       </div>
 
       {/* Summary */}
-      <div style={{ marginTop: 10, fontSize: 12, textAlign: 'center', minHeight: 18 }}>
+      <div style={{ marginTop: 7, fontSize: 10, textAlign: 'center', minHeight: 14 }}>
         {rolling ? (
-          <span style={{ color: '#3D5068', letterSpacing: 1.5, fontSize: 9, fontWeight: 700 }}>ROLLING…</span>
+          <span style={{ color: '#3D5068', letterSpacing: 1.5, fontSize: 8, fontWeight: 700 }}>ROLLING…</span>
         ) : (
           <>
             <span style={{ color: '#d07070' }}>−{result.attackerLosses}</span>
@@ -120,7 +122,7 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
             <span style={{ color: '#d07070' }}>−{result.defenderLosses}</span>
             <span style={{ color: '#3D5068' }}> def</span>
             {result.captured && (
-              <span style={{ color: '#E8B84B', fontWeight: 800, marginLeft: 8, letterSpacing: 0.5 }}>
+              <span style={{ color: '#E8B84B', fontWeight: 800, marginLeft: 6, letterSpacing: 0.5 }}>
                 CAPTURED
               </span>
             )}
@@ -134,8 +136,9 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
 function DiceLabel({ color, children }: { color: string; children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 9, fontWeight: 800, letterSpacing: 2.5,
-      color, marginBottom: 8, textTransform: 'uppercase',
+      fontSize: 8, fontWeight: 800, letterSpacing: 1.2,
+      color, marginBottom: 5, textTransform: 'uppercase',
+      maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
     }}>
       {String(children)}
     </div>
@@ -145,13 +148,12 @@ function DiceLabel({ color, children }: { color: string; children: React.ReactNo
 const panelStyle: React.CSSProperties = {
   position: 'absolute',
   top: 14,
-  left: '50%',
-  transform: 'translateX(-50%)',
+  left: 14,
   background: 'rgba(6,12,22,0.97)',
   border: '1px solid rgba(255,255,255,0.09)',
-  borderRadius: 14,
-  padding: '14px 22px',
-  boxShadow: '0 8px 36px rgba(0,0,0,0.6)',
+  borderRadius: 11,
+  padding: '9px 12px',
+  boxShadow: '0 8px 28px rgba(0,0,0,0.6)',
   animation: 'dropIn .2s ease-out',
   pointerEvents: 'none',
   zIndex: 5,
@@ -160,5 +162,5 @@ const panelStyle: React.CSSProperties = {
 
 const KEYFRAMES = `
 @keyframes shake { 0%{transform:translateY(-1px) rotate(-4deg)} 50%{transform:translateY(1px) rotate(4deg)} 100%{transform:translateY(-1px) rotate(-4deg)} }
-@keyframes dropIn { from{opacity:0;transform:translateX(-50%) translateY(-6px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+@keyframes dropIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 `;

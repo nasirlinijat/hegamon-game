@@ -592,7 +592,7 @@ export const Board = memo(function Board({
           title="Reset map view (double-click)"
           style={{
             position: 'absolute',
-            top: 14, left: 14,
+            top: 14, left: '50%', transform: 'translateX(-50%)',
             background: 'rgba(8,16,32,0.90)',
             color: '#8a9ab0',
             border: '1px solid rgba(255,255,255,0.14)',
