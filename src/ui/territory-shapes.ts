@@ -20,6 +20,25 @@ export const CONTINENT_TINT: Record<ContinentId, string> = {
   EEU: '#4fa6b0', // teal
   ME: '#c56b9e',  // magenta
   OC: '#9469b8',  // purple
+  // Risk Europe board — 18 distinct hues echoing the source map's colours.
+  gb:  '#d98a3d', // orange
+  fr:  '#9ccb6b', // light green
+  sp:  '#c8a93a', // gold
+  pt:  '#b5462f', // brick red
+  low: '#e8d24a', // yellow
+  ger: '#9aa0a8', // grey
+  nit: '#6fae5a', // medium green
+  sit: '#3f7a3a', // dark green
+  aus: '#46569e', // dark blue
+  pru: '#9cb8d8', // light blue
+  bal: '#b89ad8', // light purple
+  sca: '#8a5fb0', // purple
+  blt: '#a7c66b', // lime
+  rus: '#c0453d', // red
+  blk: '#2f6e4a', // dark green
+  ana: '#c2b96a', // khaki
+  eg:  '#e08a4a', // orange
+  naf: '#d8c0a0', // tan
 };
 
 // Sea bridges — dashed connectors between territory centroids that are adjacent (attackable) but

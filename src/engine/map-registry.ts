@@ -10,6 +10,7 @@ import { ISLES_MAP } from './isles-map';
 import { LONGMARCH_MAP } from './longmarch-map';
 import { TWINCROWNS_MAP } from './twincrowns-map';
 import { AURELIA_MAP } from './aurelia-map';
+import { EUROPE_MAP } from './europe-map';
 
 export const MAPS: Record<MapId, GameMap> = {
   classic: CLASSIC_MAP,
@@ -19,6 +20,7 @@ export const MAPS: Record<MapId, GameMap> = {
   longmarch: LONGMARCH_MAP,
   twincrowns: TWINCROWNS_MAP,
   aurelia: AURELIA_MAP,
+  europe: EUROPE_MAP,
 };
 
 /** Resolve a board by id, defaulting to the classic 42-territory world. */
@@ -62,5 +64,10 @@ export const MAP_OPTIONS: { id: MapId; name: string; blurb: string }[] = [
     id: 'aurelia',
     name: 'Aurelia',
     blurb: 'A grand 64-realm world — a golden heartland inside a contested ring of isles, encircled by six lands.',
+  },
+  {
+    id: 'europe',
+    name: 'Risk Europe',
+    blurb: 'The grand campaign — 177 historical provinces across 18 realms, from Iceland to Arabia.',
   },
 ];

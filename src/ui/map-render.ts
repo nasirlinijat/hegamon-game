@@ -12,6 +12,7 @@ import { ISLES_MAP } from '../engine/isles-map';
 import { LONGMARCH_MAP } from '../engine/longmarch-map';
 import { TWINCROWNS_MAP } from '../engine/twincrowns-map';
 import { AURELIA_MAP } from '../engine/aurelia-map';
+import { EUROPE_MAP } from '../engine/europe-map';
 import * as classicGeo from './map-geometry';
 import * as imperialGeo from './map-geometry-imperial';
 import * as verdantiaGeo from './map-geometry-verdantia';
@@ -19,6 +20,7 @@ import * as islesGeo from './map-geometry-isles';
 import * as longmarchGeo from './map-geometry-longmarch';
 import * as twincrownsGeo from './map-geometry-twincrowns';
 import * as aureliaGeo from './map-geometry-aurelia';
+import * as europeGeo from './map-geometry-europe';
 
 export interface Connector { x1: number; y1: number; x2: number; y2: number; c?: number }
 export interface WrapStub { from: TerritoryId; toEdge: number; label: string }
@@ -228,6 +230,9 @@ const ISLES: MapRender      = build(islesGeo,      ISLES_MAP,      FANTASY_TUNIN
 const LONGMARCH: MapRender  = build(longmarchGeo,  LONGMARCH_MAP,  FANTASY_TUNING);
 const TWINCROWNS: MapRender = build(twincrownsGeo, TWINCROWNS_MAP, FANTASY_TUNING);
 const AURELIA: MapRender    = build(aureliaGeo,    AURELIA_MAP,    FANTASY_TUNING);
+// Atlas board: positioned-seed Voronoi clipped to landmasses; touching provinces share borders, sea
+// routes get connectors. Larger canvas (2000×1480) so a slightly bigger gap threshold reads cleanly.
+const EUROPE: MapRender = build(europeGeo, EUROPE_MAP, { touchGrid: 2, gapThreshold: 6, sampleCap: 2400 });
 
 export function getMapRender(mapId: string): MapRender {
   switch (mapId) {
@@ -237,6 +242,7 @@ export function getMapRender(mapId: string): MapRender {
     case 'longmarch':  return LONGMARCH;
     case 'twincrowns': return TWINCROWNS;
     case 'aurelia':    return AURELIA;
+    case 'europe':     return EUROPE;
     default:           return CLASSIC;
   }
 }
