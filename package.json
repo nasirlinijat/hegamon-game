@@ -8,22 +8,33 @@
     "build": "tsc --noEmit && vite build",
     "build:map": "node scripts/build-map.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "server": "tsx watch server/index.ts",
+    "server:build": "tsc -p tsconfig.server.json",
+    "build:all": "vite build",
+    "start": "tsx server/index.ts"
   },
   "devDependencies": {
     "@types/d3-geo": "^3.1.0",
+    "@types/node": "^26.0.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^4.7.0",
     "d3-geo": "^3.1.1",
+    "playwright": "^1.61.0",
+    "polygon-clipping": "^0.15.7",
     "topojson-client": "^3.1.0",
+    "topojson-server": "^3.0.1",
+    "tsx": "^4.22.4",
     "typescript": "^5.6.3",
     "vite": "^5.4.10",
     "vitest": "^2.1.5"
   },
   "dependencies": {
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3"
   }
 }

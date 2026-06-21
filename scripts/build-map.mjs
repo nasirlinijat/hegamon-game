@@ -7,6 +7,8 @@
 
 import * as d3geo from 'd3-geo';
 import { feature, merge } from 'topojson-client';
+import { topology } from 'topojson-server';
+import polygonClipping from 'polygon-clipping';
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -24,6 +26,31 @@ const topo = JSON.parse(readFileSync(resolve(ROOT, 'data/countries-110m.json'), 
 const countriesFC = feature(topo, topo.objects.countries);
 // Index by ISO 3166-1 numeric string (world-atlas zero-pads to 3 digits: '076' not '76')
 const BY_ID = Object.fromEntries(countriesFC.features.map(f => [String(f.id), f]));
+
+// Natural Earth admin-1 states/provinces for the 4 federal countries that Risk splits
+// internally (US, Canada, Russia, Australia). Each feature carries { admin, name, lon, lat }
+// where lon/lat is the province label point — used to bin provinces into Risk territories so
+// the territory borders follow REAL province boundaries instead of rectangular bboxes.
+const admin1 = JSON.parse(readFileSync(resolve(ROOT, 'data/admin1-states.json'), 'utf8'));
+
+// Build a QUANTIZED topology of all admin-1 provinces. Quantization snaps coordinates to a
+// shared grid so adjacent provinces share identical arcs — which lets topojson `merge()`
+// dissolve their common borders cleanly (raw 50m GeoJSON vertices don't line up exactly, so a
+// plain polygon union leaves every province outlined). This is what removes the "insider" lines.
+const admin1Topo = topology({ a: admin1 }, 1e5);
+const admin1Geoms = admin1Topo.objects.a.geometries;
+
+/**
+ * Collect admin-1 provinces of one country into one DISSOLVED MultiPolygon feature, selecting by
+ * a predicate over the province label point (lon, lat). Internal province borders are removed.
+ */
+function provinceGroup(admin, pick) {
+  const geoms = admin1Geoms.filter(g => g.properties.admin === admin
+    && pick(g.properties.lon, g.properties.lat, g.properties.name));
+  if (geoms.length === 0) return null;
+  return { type: 'Feature', properties: {}, geometry: merge(admin1Topo, geoms) };
+}
+const US = 'United States of America', CA = 'Canada', RU = 'Russia', AU = 'Australia';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -53,32 +80,6 @@ function countryFeat(ids) {
   };
 }
 
-/**
- * Geographic bounding box as a GeoJSON Polygon. The ring is wound
- * counterclockwise (GeoJSON exterior convention) so d3-geo treats the interior
- * as the small area inside the box, not the rest of the globe.
- * The `_center` property is stored for centroid projection (geoCentroid() is
- * unreliable for bbox polygons near the antimeridian or poles).
- */
-function bbox(lonMin, lonMax, latMin, latMax) {
-  const pts = 16;
-  const dl = (lonMax - lonMin) / pts;
-  const da = (latMax - latMin) / pts;
-  // CCW: bottom-left → top-left → top-right → bottom-right → close
-  const coords = [
-    ...Array.from({ length: pts }, (_, i) => [lonMin, latMin + da * i]),
-    ...Array.from({ length: pts }, (_, i) => [lonMin + dl * i, latMax]),
-    ...Array.from({ length: pts }, (_, i) => [lonMax, latMax - da * i]),
-    ...Array.from({ length: pts }, (_, i) => [lonMax - dl * i, latMin]),
-    [lonMin, latMin],
-  ];
-  return {
-    type: 'Feature',
-    properties: { _center: [(lonMin + lonMax) / 2, (latMin + latMax) / 2] },
-    geometry: { type: 'Polygon', coordinates: [coords] },
-  };
-}
-
 // ---------------------------------------------------------------------------
 // mergeFeats — combine bbox + country features into one MultiPolygon feature
 // ---------------------------------------------------------------------------
@@ -104,8 +105,103 @@ function mergeFeats(features) {
 }
 
 // ---------------------------------------------------------------------------
-// Centroid overrides (lon, lat) — used when geographic centroid is off-land
-// or inside a "hole" left by the land clip.
+// dissolvedPath — produce a territory's SVG path with internal seams (the
+// province/country borders WITHIN one territory) removed, leaving only the outer
+// perimeter so neighbouring territories are easy to tell apart.
+//
+// The union is done in PROJECTED pixel space: d3's geoPath already cuts the
+// antimeridian and projects correctly (so far-east Russia doesn't smear across the
+// map), and polygon-clipping then dissolves the touching sub-polygons. Holes are
+// treated as fills — fine for a stylised Risk map (no lakes shown).
+// ---------------------------------------------------------------------------
+
+function pathToRings(d) {
+  return d.split('M').filter(Boolean).map(seg => {
+    const nums = seg.match(/-?\d+(?:\.\d+)?/g);
+    const ring = [];
+    if (nums) for (let i = 0; i + 1 < nums.length; i += 2) ring.push([+nums[i], +nums[i + 1]]);
+    return ring;
+  }).filter(r => r.length >= 3);
+}
+
+function ringsToPath(mp) {
+  let s = '';
+  for (const poly of mp) for (const ring of poly) {
+    s += 'M' + ring.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join('L') + 'Z';
+  }
+  return s;
+}
+
+function dissolvedPath(feat) {
+  const raw = pathGen(feat);
+  if (!raw) return '';
+  const rings = pathToRings(raw);
+  if (rings.length < 2) return raw;
+  const mps = rings.map(r => [[r]]); // each ring as its own MultiPolygon
+  let merged;
+  try {
+    merged = polygonClipping.union(mps[0], ...mps.slice(1));
+  } catch (e) {
+    console.warn('dissolve failed, keeping raw path:', e.message);
+    return raw;
+  }
+  return ringsToPath(merged);
+}
+
+// ---------------------------------------------------------------------------
+// Label / coin placement: pole of inaccessibility on the largest piece.
+// A geographic centroid can fall in the sea (concave coastlines) or between islands (multi-part
+// shapes). Instead, place the label at the interior point of the LARGEST sub-polygon farthest from
+// any edge — guaranteed on the visible landmass. `r` is that point's clearance (inscribed radius),
+// used to bound how far the name label can sit above the coin without leaving the territory.
+// ---------------------------------------------------------------------------
+
+function ringArea(r) {
+  let a = 0;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) a += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]);
+  return Math.abs(a / 2);
+}
+function pointInRing(px, py, r) {
+  let inside = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const xi = r[i][0], yi = r[i][1], xj = r[j][0], yj = r[j][1];
+    if (((yi > py) !== (yj > py)) && (px < ((xj - xi) * (py - yi)) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function distToSeg(px, py, a, b) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const l2 = dx * dx + dy * dy;
+  let t = l2 ? ((px - a[0]) * dx + (py - a[1]) * dy) / l2 : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (a[0] + t * dx), py - (a[1] + t * dy));
+}
+function distToRing(px, py, r) {
+  let m = Infinity;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) m = Math.min(m, distToSeg(px, py, r[i], r[j]));
+  return m;
+}
+function labelPoint(d) {
+  const rings = pathToRings(d);
+  if (!rings.length) return { x: MAP_W / 2, y: MAP_H / 2, r: 0 };
+  let ring = rings[0], bestArea = ringArea(rings[0]);
+  for (const rg of rings) { const a = ringArea(rg); if (a > bestArea) { bestArea = a; ring = rg; } }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const [x, y] of ring) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  const step = Math.max(1, Math.min(maxX - minX, maxY - minY) / 30);
+  let bx = (minX + maxX) / 2, by = (minY + maxY) / 2, bd = -Infinity;
+  for (let x = minX; x <= maxX; x += step) {
+    for (let y = minY; y <= maxY; y += step) {
+      if (!pointInRing(x, y, ring)) continue;
+      const dd = distToRing(x, y, ring);
+      if (dd > bd) { bd = dd; bx = x; by = y; }
+    }
+  }
+  return { x: Math.round(bx * 10) / 10, y: Math.round(by * 10) / 10, r: Math.round(Math.max(0, bd) * 10) / 10 };
+}
+
+// ---------------------------------------------------------------------------
+// Centroid overrides (lon, lat) — retained for reference; superseded by labelPoint above.
 // ---------------------------------------------------------------------------
 
 const CENTROID_OVERRIDE = {
@@ -126,6 +222,9 @@ const CENTROID_OVERRIDE = {
   // Australia sub-territories
   'western-australia':   [122, -26],
   'eastern-australia':   [146, -32],
+  // Ukraine now spans Eastern Europe + Western (European) Russia — keep label in E. Europe,
+  // not the new polygon's centroid which falls in central Russia.
+  ukraine:               [35, 52],
 };
 
 // ---------------------------------------------------------------------------
@@ -134,15 +233,17 @@ const CENTROID_OVERRIDE = {
 // ---------------------------------------------------------------------------
 
 const COMPOSITION = {
-  // ── North America ──────────────────────────────────────────────────────────
-  alaska:                 bbox(-180, -141, 55, 72),
-  'northwest-territory':  bbox(-141, -52, 60, 84),
+  // ── North America (US + Canada via real admin-1 borders) ───────────────────
+  alaska:                 provinceGroup(US, (lon, lat, n) => n === 'Alaska'),
   greenland:              countryFeat([304]),
-  alberta:                bbox(-141, -100, 49, 60),
-  ontario:                bbox(-100, -76, 42, 60),
-  quebec:                 bbox(-76, -52, 44, 60),
-  'western-us':           bbox(-125, -100, 24, 49),
-  'eastern-us':           bbox(-100, -67, 24, 47),
+  // Canada: northern territories (lat≥60), then western / Ontario / eastern by longitude.
+  'northwest-territory':  provinceGroup(CA, (lon, lat) => lat >= 60),
+  alberta:                provinceGroup(CA, (lon, lat) => lat < 60 && lon < -95),
+  ontario:                provinceGroup(CA, (lon, lat) => lat < 60 && lon >= -95 && lon < -78),
+  quebec:                 provinceGroup(CA, (lon, lat) => lat < 60 && lon >= -78),
+  // Lower-48 US split E/W at lon -100 (Hawaii excluded, Alaska is its own territory).
+  'western-us':           provinceGroup(US, (lon, lat, n) => n !== 'Alaska' && n !== 'Hawaii' && lon < -100),
+  'eastern-us':           provinceGroup(US, (lon, lat, n) => n !== 'Alaska' && n !== 'Hawaii' && lon >= -100),
   // Mexico + Central America + Caribbean (incl. Bahamas 44, T&T 780, Jamaica 388)
   'central-america':      countryFeat([484, 320, 84, 340, 222, 558, 188, 591,
                                        192, 332, 214, 630, 388, 780, 44]),
@@ -166,8 +267,12 @@ const COMPOSITION = {
                                        807, 8, 70, 499, 792, 196]),
   // Ukraine: Ukraine, Belarus, Romania, Moldova, Hungary, Baltics,
   //          + Caucasus (Georgia 268, Armenia 51, Azerbaijan 31)
-  ukraine:                countryFeat([804, 112, 642, 498, 348, 440, 428, 233,
-                                       268, 51, 31]),
+  //          + European Russia (admin-1 subjects west of the Urals, lon < 55) — in classic
+  //          Risk the Ukraine territory IS European Russia.
+  ukraine:                mergeFeats([
+                            countryFeat([804, 112, 642, 498, 348, 440, 428, 233, 268, 51, 31]),
+                            provinceGroup(RU, (lon) => lon < 55),
+                          ]),
 
   // ── Africa ────────────────────────────────────────────────────────────────
   // North Africa: Maghreb + West Africa + W. Sahara
@@ -183,13 +288,15 @@ const COMPOSITION = {
   'south-africa':         countryFeat([710, 516, 72, 894, 716, 508, 454, 748, 426, 24]),
   madagascar:             countryFeat([450]),
 
-  // ── Asia — Russia split into 5 strictly non-overlapping bboxes ────────────
-  // ural bbox + Kazakhstan (398) + Uzbekistan (860) + Turkmenistan (795)
-  ural:     mergeFeats([bbox(55, 70, 52, 76), countryFeat([398, 860, 795])]),
-  siberia:                bbox(70,  105, 52, 76),
-  irkutsk:                bbox(105, 140, 50, 62),
-  yakutsk:                bbox(105, 140, 62, 76),
-  kamchatka:              bbox(140, 180, 48, 76),
+  // ── Asia — Russia split into 5 territories via real admin-1 federal subjects ──
+  // Binned by province label longitude/latitude; borders follow real subject boundaries.
+  // ural = Urals band (lon 55–73) + Kazakhstan (398) + Uzbekistan (860) + Turkmenistan (795)
+  ural:     mergeFeats([provinceGroup(RU, (lon) => lon >= 55 && lon < 73),
+                        countryFeat([398, 860, 795])]),
+  siberia:                provinceGroup(RU, (lon) => lon >= 73 && lon < 105),
+  irkutsk:                provinceGroup(RU, (lon, lat) => lon >= 105 && lon < 133 && lat < 58),
+  yakutsk:                provinceGroup(RU, (lon, lat) => lon >= 105 && lon < 133 && lat >= 58),
+  kamchatka:              provinceGroup(RU, (lon) => lon >= 133),
   // Mongolia + North Korea (408) — adjacent in Risk
   mongolia:               countryFeat([496, 408]),
   // Japan + South Korea (410)
@@ -210,9 +317,10 @@ const COMPOSITION = {
   indonesia:              countryFeat([360, 626]),
   // New Guinea + Pacific islands near it
   'new-guinea':           countryFeat([598, 90, 548]),
-  'western-australia':    bbox(112, 129, -45, -14),
-  // Eastern Australia + New Zealand (554) + New Caledonia (540) + Fiji (242)
-  'eastern-australia':    mergeFeats([bbox(129, 155, -45, -10),
+  // Western Australia = WA + NT + SA (lon < 140)
+  'western-australia':    provinceGroup(AU, (lon) => lon < 140),
+  // Eastern Australia = QLD + NSW + VIC + TAS (lon ≥ 140) + NZ (554) + New Caledonia (540) + Fiji (242)
+  'eastern-australia':    mergeFeats([provinceGroup(AU, (lon) => lon >= 140),
                                       countryFeat([554, 540, 242])]),
 };
 
@@ -220,13 +328,20 @@ const COMPOSITION = {
 // Projection
 // ---------------------------------------------------------------------------
 
-// Merge all land to get a bounding feature for fitExtent
-const landGeom = merge(topo, topo.objects.countries.geometries);
+// Merge all land (minus Antarctica — id '010') into a bounding feature for fitExtent and the
+// coastline glow. Antarctica is not a playable territory and only added an empty southern strip.
+const landGeometries = topo.objects.countries.geometries.filter((g) => String(g.id) !== '010');
+const landGeom = merge(topo, landGeometries);
 const landFeat = { type: 'Feature', geometry: landGeom, properties: {} };
 
+// Margins so the map sits centred with ocean on every side (no land touching the viewport
+// edge — Alaska / Kamchatka were getting clipped). Side margins are larger than top/bottom.
+const PAD_X = 110;
+const PAD_TOP = 80;
+const PAD_BOTTOM = 60;
 const projection = d3geo.geoEquirectangular()
   .rotate([-12, 0])
-  .fitExtent([[4, 4], [MAP_W - 4, MAP_H - 4]], landFeat);
+  .fitExtent([[PAD_X, PAD_TOP], [MAP_W - PAD_X, MAP_H - PAD_BOTTOM]], landFeat);
 
 const pathGen = d3geo.geoPath(projection);
 
@@ -240,19 +355,12 @@ const missing = [];
 
 for (const [id, feat] of Object.entries(COMPOSITION)) {
   if (!feat) { missing.push(id); continue; }
-  const d = pathGen(feat);
+  // Dissolve internal seams (in projected space) so only the outer border remains.
+  const d = dissolvedPath(feat);
   if (!d) { missing.push(id); continue; }
   paths[id] = d;
-  // Priority: explicit override → bbox _center property → geoCentroid.
-  const override = CENTROID_OVERRIDE[id];
-  const precomputed = feat.properties?._center;
-  const gc = override ?? precomputed ?? d3geo.geoCentroid(feat);
-  const c = projection(gc);
-  if (!c || isNaN(c[0]) || isNaN(c[1])) {
-    centroids[id] = { x: MAP_W / 2, y: MAP_H / 2 };
-  } else {
-    centroids[id] = { x: Math.round(c[0] * 10) / 10, y: Math.round(c[1] * 10) / 10 };
-  }
+  // Place the label/coin on the largest landmass, farthest from any edge — never off-shape.
+  centroids[id] = labelPoint(d);
 }
 
 if (missing.length) {
@@ -278,7 +386,7 @@ export const MAP_H = ${MAP_H};
 
 export const TERRITORY_PATH: Record<TerritoryId, string> = ${JSON.stringify(paths, null, 2)} as any;
 
-export const TERRITORY_CENTROID: Record<TerritoryId, { x: number; y: number }> = ${JSON.stringify(centroids, null, 2)} as any;
+export const TERRITORY_CENTROID: Record<TerritoryId, { x: number; y: number; r: number }> = ${JSON.stringify(centroids, null, 2)} as any;
 
 export const LAND_PATH = ${JSON.stringify(landPath)};
 `;

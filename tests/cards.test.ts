@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { createInitialState, type GameState, type Card, type PlayerId } from '../src/engine/state';
 import { ALL_TERRITORY_IDS, type TerritoryId } from '../src/engine/map';
+import { DEFAULT_CONFIG } from '../src/engine/modes';
 import { reduce } from '../src/engine/actions';
 import {
   isValidSet,
   tradeInValue,
+  fixedSetValue,
+  cardSetValue,
   createDeck,
   applyTradeIn,
   drawCardForCurrentPlayer,
@@ -104,6 +107,85 @@ describe('tradeInValue', () => {
 });
 
 // ---------------------------------------------------------------------------
+// tradeInValue — card bonus modes
+// ---------------------------------------------------------------------------
+
+describe('tradeInValue — card bonus modes', () => {
+  it('none: always 0 regardless of tradeInCount', () => {
+    expect(tradeInValue(0, 'none')).toBe(0);
+    expect(tradeInValue(7, 'none')).toBe(0);
+  });
+
+  it('fixed: composition-based, never escalates (all-inf 4, all-cav 6, all-art 8, one-each 10)', () => {
+    const inf2: Card = { type: 'infantry', territory: 'ontario' };
+    const inf3: Card = { type: 'infantry', territory: 'quebec' };
+    const cav2: Card = { type: 'cavalry', territory: 'peru' };
+    expect(fixedSetValue([INF, inf2, inf3])).toBe(4);                 // three infantry
+    expect(fixedSetValue([CAV, cav2, { type: 'cavalry', territory: 'iceland' }])).toBe(6); // three cavalry
+    expect(fixedSetValue([ART, { type: 'artillery', territory: 'congo' }, { type: 'artillery', territory: 'india' }])).toBe(8); // three artillery
+    expect(fixedSetValue([INF, CAV, ART])).toBe(10);                  // one of each
+    expect(fixedSetValue([INF, inf2, WILD])).toBe(4);                 // two infantry + wild → three infantry
+    expect(fixedSetValue([INF, CAV, WILD])).toBe(10);                 // two different + wild → one of each
+    // Independent of the global trade count.
+    expect(cardSetValue([INF, CAV, ART], 'fixed', 0)).toBe(10);
+    expect(cardSetValue([INF, CAV, ART], 'fixed', 9)).toBe(10);
+  });
+
+  it('nuclear: follows escalating sequence', () => {
+    expect(tradeInValue(0, 'nuclear')).toBe(8);
+    expect(tradeInValue(1, 'nuclear')).toBe(10);
+    expect(tradeInValue(2, 'nuclear')).toBe(12);
+    expect(tradeInValue(3, 'nuclear')).toBe(15);
+    expect(tradeInValue(4, 'nuclear')).toBe(20);
+    expect(tradeInValue(5, 'nuclear')).toBe(25);
+    expect(tradeInValue(6, 'nuclear')).toBe(30);
+    expect(tradeInValue(7, 'nuclear')).toBe(35);
+  });
+
+  it('progressive (explicit) matches the default behavior', () => {
+    expect(tradeInValue(0, 'progressive')).toBe(4);
+    expect(tradeInValue(5, 'progressive')).toBe(15);
+    expect(tradeInValue(6, 'progressive')).toBe(20);
+  });
+
+  it('progressive (omitted) is the default', () => {
+    expect(tradeInValue(0)).toBe(4);
+  });
+
+  it('applyTradeIn uses config.cardBonus=none → 0 reinforcements from trade', () => {
+    const s = baseState('reinforce', [INF, CAV, ART]);
+    const withNone: GameState = { ...s, config: { ...DEFAULT_CONFIG, cardBonus: 'none' }, reinforcementsRemaining: 0 };
+    const next = applyTradeIn(withNone, [0, 1, 2]);
+    expect(next.reinforcementsRemaining).toBe(0);
+  });
+
+  it('applyTradeIn uses config.cardBonus=fixed → one-of-each set yields 10 reinforcements', () => {
+    const s = baseState('reinforce', [INF, CAV, ART]); // one of each
+    const withFixed: GameState = { ...s, config: { ...DEFAULT_CONFIG, cardBonus: 'fixed' }, reinforcementsRemaining: 0 };
+    const next = applyTradeIn(withFixed, [0, 1, 2]);
+    expect(next.reinforcementsRemaining).toBe(10);
+  });
+
+  it('applyTradeIn fixed: three-of-a-kind uses the type value (3 infantry → 4)', () => {
+    const inf2: Card = { type: 'infantry', territory: 'ontario' };
+    const inf3: Card = { type: 'infantry', territory: 'quebec' };
+    const s = baseState('reinforce', [INF, inf2, inf3]);
+    const withFixed: GameState = { ...s, config: { ...DEFAULT_CONFIG, cardBonus: 'fixed' }, reinforcementsRemaining: 0 };
+    // INF is alaska (owned by P1 in baseState) → +2 territory bonus is placed on alaska, not added
+    // to reinforcements. Trade value for three infantry is 4.
+    const next = applyTradeIn(withFixed, [0, 1, 2]);
+    expect(next.reinforcementsRemaining).toBe(4);
+  });
+
+  it('applyTradeIn uses config.cardBonus=nuclear → 8 on first trade', () => {
+    const s = baseState('reinforce', [INF, CAV, ART]);
+    const withNuclear: GameState = { ...s, config: { ...DEFAULT_CONFIG, cardBonus: 'nuclear' }, reinforcementsRemaining: 0 };
+    const next = applyTradeIn(withNuclear, [0, 1, 2]);
+    expect(next.reinforcementsRemaining).toBe(8);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // createDeck
 // ---------------------------------------------------------------------------
 
@@ -172,14 +254,15 @@ describe('applyTradeIn', () => {
     expect(next.discard).toHaveLength(3);
   });
 
-  it('territory-match bonus: +2 armies placed directly on the matching territory', () => {
-    // P1 owns alaska (INF territory). Trading [INF, CAV, ART] → +2 on alaska.
+  it('territory-match bonus: +2 armies once, on the first matching owned territory', () => {
+    // P1 owns alaska/greenland/brazil but the bonus is capped at +2 total per trade —
+    // placed on the first matching card's territory (alaska), not on every match.
     const state = baseState('reinforce', [INF, CAV, ART]);
     const before = state.armies['alaska'] ?? 0;
     const next = applyTradeIn(state, [0, 1, 2]);
     expect(next.armies['alaska']).toBe(before + 2);
-    expect(next.armies['greenland']).toBe((state.armies['greenland'] ?? 0) + 2); // CAV territory
-    expect(next.armies['brazil']).toBe((state.armies['brazil'] ?? 0) + 2); // ART territory
+    expect(next.armies['greenland']).toBe(state.armies['greenland'] ?? 0); // no extra bonus
+    expect(next.armies['brazil']).toBe(state.armies['brazil'] ?? 0);       // no extra bonus
   });
 
   it('no territory-match bonus when territory is enemy-owned', () => {

@@ -1,20 +1,24 @@
-import { ALL_TERRITORY_IDS } from './map';
+import { ALL_TERRITORY_IDS, type TerritoryId } from './map';
 import type { Rng } from './dice';
+import type { CardBonusMode } from './modes';
 import { type Card, type CardType, type GameState, IllegalActionError } from './state';
 import { currentPlayerId } from './rules';
 
-// --- Deck data (44 cards: 14 infantry + 14 cavalry + 14 artillery + 2 wilds) ---
+// --- Deck data (one territory card per territory + 2 wilds, cycling infantry/cavalry/artillery) ---
 
 const TYPE_CYCLE: readonly CardType[] = ['infantry', 'cavalry', 'artillery'];
 
-export const UNSHUFFLED_DECK: readonly Card[] = [
-  ...ALL_TERRITORY_IDS.map((id, i) => ({
-    type: TYPE_CYCLE[i % 3]!,
-    territory: id,
-  })),
-  { type: 'wild', territory: null },
-  { type: 'wild', territory: null },
-];
+/** Build the unshuffled territory deck for a given territory set (+2 wilds). */
+export function buildDeck(territoryIds: readonly TerritoryId[]): Card[] {
+  return [
+    ...territoryIds.map((id, i) => ({ type: TYPE_CYCLE[i % 3]!, territory: id })),
+    { type: 'wild' as const, territory: null },
+    { type: 'wild' as const, territory: null },
+  ];
+}
+
+/** Classic-board deck, kept as a stable export for existing callers and tests. */
+export const UNSHUFFLED_DECK: readonly Card[] = buildDeck(ALL_TERRITORY_IDS);
 
 export function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   const result = [...arr];
@@ -25,8 +29,10 @@ export function shuffle<T>(arr: readonly T[], rng: Rng): T[] {
   return result;
 }
 
-export function createDeck(rng?: Rng): Card[] {
-  return rng ? shuffle(UNSHUFFLED_DECK, rng) : [...UNSHUFFLED_DECK];
+/** Create a draw pile for the given territory set (defaults to the classic board). */
+export function createDeck(rng?: Rng, territoryIds: readonly TerritoryId[] = ALL_TERRITORY_IDS): Card[] {
+  const deck = buildDeck(territoryIds);
+  return rng ? shuffle(deck, rng) : deck;
 }
 
 // --- Set detection ---
@@ -47,13 +53,57 @@ export function isValidSet(cards: readonly [Card, Card, Card]): boolean {
   return types.size === 1 || types.size === 3;
 }
 
-// --- Trade-in value (global escalation counter) ---
+// --- Trade-in value ---
+//
+// Two real RISK: Global Domination card modes:
+//   • Progressive — escalating per global trade-in: 4,6,8,10,12,15, then +5 each (20,25,30…).
+//   • Fixed — value depends on the SET COMPOSITION, never escalates: all-infantry 4, all-cavalry 6,
+//     all-artillery 8, one-of-each 10 (max). A wild completes the best set.
+// (Plus our extra options: None = 0, Nuclear = a steeper escalation.)
 
 const TRADE_SEQUENCE = [4, 6, 8, 10, 12, 15] as const;
+const NUCLEAR_SEQUENCE = [8, 10, 12, 15, 20, 25] as const;
 
-export function tradeInValue(tradeInCount: number): number {
-  if (tradeInCount < TRADE_SEQUENCE.length) return TRADE_SEQUENCE[tradeInCount]!;
-  return 15 + (tradeInCount - 5) * 5;
+/** Composition-based ("Fixed" mode) value for a set; independent of how many sets were traded. */
+const FIXED_TYPE_VALUE: Record<'infantry' | 'cavalry' | 'artillery', number> = {
+  infantry: 4,
+  cavalry: 6,
+  artillery: 8,
+};
+
+export function fixedSetValue(cards: readonly [Card, Card, Card]): number {
+  const nonWild = cards
+    .map((c) => c.type)
+    .filter((t): t is 'infantry' | 'cavalry' | 'artillery' => t !== 'wild');
+  const distinct = new Set(nonWild);
+  // Three of a kind (incl. two-same + wild): value by type. Otherwise it's one-of-each (incl.
+  // two-different + wild, where the wild completes the trio): the top value of 10.
+  return distinct.size === 1 ? FIXED_TYPE_VALUE[nonWild[0]!] : 10;
+}
+
+/** Escalation-based value (Progressive / Nuclear); 0 for None. Fixed returns its max (10) as a
+ *  count-agnostic fallback — callers with the actual cards should use cardSetValue instead. */
+export function tradeInValue(tradeInCount: number, mode: CardBonusMode = 'progressive'): number {
+  switch (mode) {
+    case 'none': return 0;
+    case 'fixed': return 10;
+    case 'nuclear':
+      if (tradeInCount < NUCLEAR_SEQUENCE.length) return NUCLEAR_SEQUENCE[tradeInCount]!;
+      return 25 + (tradeInCount - 5) * 5;
+    default: // 'progressive'
+      if (tradeInCount < TRADE_SEQUENCE.length) return TRADE_SEQUENCE[tradeInCount]!;
+      return 15 + (tradeInCount - 5) * 5;
+  }
+}
+
+/** Armies for trading a specific set, honouring the card-bonus mode. Fixed is composition-based
+ *  (needs the cards); escalation modes only need the global trade count. */
+export function cardSetValue(
+  cards: readonly [Card, Card, Card],
+  mode: CardBonusMode,
+  tradeInCount: number,
+): number {
+  return mode === 'fixed' ? fixedSetValue(cards) : tradeInValue(tradeInCount, mode);
 }
 
 // --- Apply trade-in (pure; called from reducer) ---
@@ -83,19 +133,21 @@ export function applyTradeIn(
   if (!isValidSet(tradedCards))
     throw new IllegalActionError('the three cards do not form a valid set');
 
-  const baseArmies = tradeInValue(state.tradeInCount);
+  const baseArmies = cardSetValue(tradedCards, state.config.cardBonus, state.tradeInCount);
 
   // Remove cards from hand (splice descending to keep indices stable)
   const sortedDesc = [...cardIndices].sort((a, b) => b - a);
   const newCards = [...player.cards];
   for (const idx of sortedDesc) newCards.splice(idx, 1);
 
-  // Territory-match bonus: +2 armies placed directly on each matching territory
+  // Territory-match bonus: +2 armies, ONCE per trade (standard Risk caps it at 2 even if
+  // several traded cards match), placed on the first matching territory the player owns.
   const newArmies = { ...state.armies } as Record<string, number>;
-  for (const card of tradedCards) {
-    if (card.territory !== null && state.owner[card.territory] === pid) {
-      newArmies[card.territory] = (newArmies[card.territory] ?? 0) + 2;
-    }
+  const matchCard = tradedCards.find(
+    (card) => card.territory !== null && state.owner[card.territory] === pid,
+  );
+  if (matchCard && matchCard.territory !== null) {
+    newArmies[matchCard.territory] = (newArmies[matchCard.territory] ?? 0) + 2;
   }
 
   const newPlayers = state.players.map((p, i) =>

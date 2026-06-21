@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What we're building
 
-A playable digital Risk clone: 42 territories, 6 continents, single human vs AI opponents.
+A playable digital Risk clone, single human vs AI opponents, with two selectable boards (chosen on
+the setup screen): the classic world (42 territories / 6 continents) and the imperial world (79 / 8).
+See `ADDING_A_MAP.md` for how a board is defined and rendered.
 
 ## Commands
 
@@ -87,4 +89,4 @@ Commit after each phase passes tests with a descriptive message.
 
 ## Out of scope (v1)
 
-Online multiplayer, 2-player neutral-army variant, mission/secret-objective cards.
+Online multiplayer.

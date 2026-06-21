@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { createInitialState, type GameState } from '../src/engine/state';
-import { ALL_TERRITORY_IDS, CONTINENTS, type TerritoryId } from '../src/engine/map';
+import { createInitialState, NEUTRAL_ID, ZOMBIE_ID, type GameState, type PlayerId } from '../src/engine/state';
+import { ALL_TERRITORY_IDS, CONTINENTS, areAdjacent, type TerritoryId } from '../src/engine/map';
 import {
   resolveCombat,
   attackDiceCount,
@@ -8,12 +8,18 @@ import {
   calcReinforcements,
   ownsContinent,
   validateReinforce,
+  validateAttack,
   applyAttack,
   resolveBlitz,
   validateFortify,
+  connectedThroughOwned,
+  startTurn,
   checkWin,
+  nextAlivePointer,
+  applyZombieTurn,
 } from '../src/engine/rules';
 import { reduce } from '../src/engine/actions';
+import { DEFAULT_CONFIG } from '../src/engine/modes';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -388,11 +394,11 @@ describe('validateFortify', () => {
   });
 
   it('non-adjacent but connected through owned chain → pass', () => {
-    // P1 owns alaska → northwest-territory → ontario (chain)
-    const p1 = ['alaska', 'northwest-territory', 'ontario'] as TerritoryId[];
+    // P1 owns alaska → northwest-territory → alberta (chain)
+    const p1 = ['alaska', 'northwest-territory', 'alberta'] as TerritoryId[];
     const state = twoPlayerState(p1, { phase: 'fortify' });
-    const s = { ...state, armies: { ...state.armies, alaska: 5, ontario: 2 } };
-    expect(validateFortify(s, 'alaska', 'ontario', 3).ok).toBe(true);
+    const s = { ...state, armies: { ...state.armies, alaska: 5, alberta: 2 } };
+    expect(validateFortify(s, 'alaska', 'alberta', 3).ok).toBe(true);
   });
 
   it('connected path only through enemy territory → fail', () => {
@@ -513,37 +519,37 @@ describe('resolveBlitz', () => {
   it('captures in a single sweeping round and advances all-but-one', () => {
     const s = twoPlayerState(['alaska'], {
       phase: 'attack',
-      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, alberta: 2 } as GameState['armies'],
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, 'northwest-territory': 2 } as GameState['armies'],
     });
     // attacker rolls [6,6,6] (3 dice), defender [1,1] (2 dice) → defender loses both → capture.
-    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([HI, HI, HI, LO, LO]));
+    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([HI, HI, HI, LO, LO]));
     expect(captured).toBe(true);
     expect(rounds).toHaveLength(1);
-    expect(state.owner['alberta']).toBe('P1');
-    expect(state.armies['alaska']).toBe(1);   // left exactly one behind
-    expect(state.armies['alberta']).toBe(9);  // moved 10 − 0 losses − 1
+    expect(state.owner['northwest-territory']).toBe('P1');
+    expect(state.armies['alaska']).toBe(1);                    // left exactly one behind
+    expect(state.armies['northwest-territory']).toBe(9);       // moved 10 − 0 losses − 1
   });
 
   it('stops without capture when the attacker drops to one army', () => {
     const s = twoPlayerState(['alaska'], {
       phase: 'attack',
-      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 3, alberta: 3 } as GameState['armies'],
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 3, 'northwest-territory': 3 } as GameState['armies'],
     });
     // attacker [1,1] vs defender [6,6] → attacker loses both → alaska 3→1, loop ends.
-    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([LO, LO, HI, HI]));
+    const { state, rounds, captured } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([LO, LO, HI, HI]));
     expect(captured).toBe(false);
     expect(rounds).toHaveLength(1);
-    expect(state.owner['alberta']).toBe('P2');
+    expect(state.owner['northwest-territory']).toBe('P2');
     expect(state.armies['alaska']).toBe(1);
   });
 
   it('conserves total board armies (changes only by combat losses)', () => {
     const s = twoPlayerState(['alaska'], {
       phase: 'attack',
-      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, alberta: 2 } as GameState['armies'],
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, 'northwest-territory': 2 } as GameState['armies'],
     });
     const before = boardTotal(s);
-    const { state, rounds } = resolveBlitz(s, 'alaska', 'alberta', scriptedRng([HI, HI, HI, LO, LO]));
+    const { state, rounds } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([HI, HI, HI, LO, LO]));
     const losses = rounds.reduce((sum, r) => sum + r.attackerLosses + r.defenderLosses, 0);
     expect(boardTotal(state)).toBe(before - losses);
   });
@@ -551,5 +557,637 @@ describe('resolveBlitz', () => {
   it('rejects an illegal blitz (non-adjacent or under-strength source)', () => {
     const s = twoPlayerState(['alaska'], { phase: 'attack' });
     expect(() => resolveBlitz(s, 'alaska', 'brazil', scriptedRng([HI]))).toThrow();
+  });
+
+  it('honours keepBehind: advances committed survivors and leaves the reserve', () => {
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, 'northwest-territory': 2 } as GameState['armies'],
+    });
+    // keepBehind = 4 → capture in one sweep, advance 10 − 4 = 6, leave 4 behind.
+    const { state, captured } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([HI, HI, HI, LO, LO]), 4);
+    expect(captured).toBe(true);
+    expect(state.owner['northwest-territory']).toBe('P1');
+    expect(state.armies['alaska']).toBe(4);                    // reserve kept behind
+    expect(state.armies['northwest-territory']).toBe(6);       // committed survivors advanced
+  });
+
+  it('keepBehind never moves fewer than the dice rolled (min-move rule still applies)', () => {
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 4, 'northwest-territory': 1 } as GameState['armies'],
+    });
+    // 4 armies → 3 dice. keepBehind 3 would advance only 1, but must move ≥ dice rolled (3).
+    const { state, captured } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([HI, HI, HI, LO]), 3);
+    expect(captured).toBe(true);
+    expect(state.armies['northwest-territory']).toBe(3);       // forced up to the 3-dice minimum
+    expect(state.armies['alaska']).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Portals
+// ---------------------------------------------------------------------------
+
+describe('portals', () => {
+  // Helper: build a state with a specific portal pair injected.
+  function portalState(
+    p1Territories: TerritoryId[],
+    portal: readonly [TerritoryId, TerritoryId],
+    overrides: Partial<GameState> = {},
+  ): GameState {
+    return twoPlayerState(p1Territories, { ...overrides, portals: [portal] });
+  }
+
+  it('areAdjacent: portal pair is treated as adjacent in both directions', () => {
+    // alaska and egypt are not map-adjacent.
+    expect(areAdjacent('alaska', 'egypt')).toBe(false);
+    expect(areAdjacent('alaska', 'egypt', [['alaska', 'egypt']])).toBe(true);
+    expect(areAdjacent('egypt', 'alaska', [['alaska', 'egypt']])).toBe(true);
+  });
+
+  it('validateAttack allows an attack across a portal', () => {
+    // P1 owns alaska (3 armies); P2 owns egypt. Normally not adjacent — portal makes it valid.
+    const state = portalState(
+      ALL_TERRITORY_IDS.filter((id) => id !== 'egypt') as TerritoryId[],
+      ['alaska', 'egypt'],
+      { phase: 'attack' },
+    );
+    expect(validateAttack(state, 'alaska', 'egypt').ok).toBe(true);
+  });
+
+  it('validateAttack still rejects a non-adjacent, non-portal pair', () => {
+    // No portal between alaska and egypt → attack should fail.
+    const state = twoPlayerState(
+      ALL_TERRITORY_IDS.filter((id) => id !== 'egypt') as TerritoryId[],
+      { phase: 'attack' },
+    );
+    expect(validateAttack(state, 'alaska', 'egypt').ok).toBe(false);
+  });
+
+  it('connectedThroughOwned traverses portal edges', () => {
+    // P1 owns alaska and egypt but nothing connecting them on the map.
+    // With the portal, they should be connected.
+    const state = twoPlayerState(['alaska', 'egypt'], {
+      portals: [['alaska', 'egypt']] as const,
+    });
+    expect(connectedThroughOwned(state, 'P1', 'alaska', 'egypt')).toBe(true);
+  });
+
+  it('connectedThroughOwned without portal: alaska and egypt are not connected', () => {
+    const state = twoPlayerState(['alaska', 'egypt']);
+    expect(connectedThroughOwned(state, 'P1', 'alaska', 'egypt')).toBe(false);
+  });
+
+  it('createInitialState generates 3 portal pairs in portals mode', () => {
+    const state = createInitialState(['P1', 'P2'], {
+      config: { ...DEFAULT_CONFIG, mode: 'portals' },
+      rng: () => 0.5,
+    });
+    expect(state.portals).toBeDefined();
+    expect(state.portals!.length).toBe(3);
+  });
+
+  it('generated portals are all non-adjacent on the base map', () => {
+    const state = createInitialState(['P1', 'P2'], {
+      config: { ...DEFAULT_CONFIG, mode: 'portals' },
+      rng: () => 0.5,
+    });
+    for (const [a, b] of state.portals!) {
+      expect(areAdjacent(a, b)).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Blizzards
+// ---------------------------------------------------------------------------
+
+describe('blizzards', () => {
+  const BLIZZARD_CONFIG = { ...DEFAULT_CONFIG, mode: 'blizzards' as const };
+
+  function frozenState(
+    p1Territories: TerritoryId[],
+    frozen: Partial<Record<TerritoryId, true>>,
+    overrides: Partial<GameState> = {},
+  ): GameState {
+    return twoPlayerState(p1Territories, {
+      ...overrides,
+      frozenTerritories: frozen as Readonly<Record<TerritoryId, true>>,
+    });
+  }
+
+  it('createInitialState sets frozenTerritories and blizzardSchedule with 30 entries', () => {
+    const state = createInitialState(['P1', 'P2'], { config: BLIZZARD_CONFIG, rng: () => 0.5 });
+    expect(state.frozenTerritories).toBeDefined();
+    expect(state.blizzardSchedule).toBeDefined();
+    expect(state.blizzardSchedule!.length).toBe(30);
+  });
+
+  it('validateAttack rejects an attack FROM a frozen territory', () => {
+    const state = frozenState(
+      ALL_TERRITORY_IDS.filter((id) => id !== 'northwest-territory') as TerritoryId[],
+      { alaska: true },
+      { phase: 'attack' },
+    );
+    expect(validateAttack(state, 'alaska', 'northwest-territory').ok).toBe(false);
+  });
+
+  it('validateAttack rejects an attack INTO a frozen territory', () => {
+    const state = frozenState(
+      ALL_TERRITORY_IDS.filter((id) => id !== 'northwest-territory') as TerritoryId[],
+      { 'northwest-territory': true },
+      { phase: 'attack' },
+    );
+    expect(validateAttack(state, 'alaska', 'northwest-territory').ok).toBe(false);
+  });
+
+  it('validateAttack allows attacks when neither territory is frozen', () => {
+    const state = frozenState(
+      ALL_TERRITORY_IDS.filter((id) => id !== 'northwest-territory') as TerritoryId[],
+      { argentina: true },
+      { phase: 'attack' },
+    );
+    expect(validateAttack(state, 'alaska', 'northwest-territory').ok).toBe(true);
+  });
+
+  it('connectedThroughOwned cannot traverse a frozen intermediate territory', () => {
+    // P1 owns iceland, great-britain, northern-europe.
+    // iceland → northern-europe requires going through great-britain or scandinavia.
+    // scandinavia is P2-owned, great-britain is frozen → no valid path.
+    const state = frozenState(
+      ['iceland', 'great-britain', 'northern-europe'],
+      { 'great-britain': true },
+    );
+    expect(connectedThroughOwned(state, 'P1', 'iceland', 'northern-europe')).toBe(false);
+  });
+
+  it('connectedThroughOwned succeeds when the intermediate territory is not frozen', () => {
+    const state = twoPlayerState(['iceland', 'scandinavia', 'northern-europe']);
+    expect(connectedThroughOwned(state, 'P1', 'iceland', 'northern-europe')).toBe(true);
+  });
+
+  it('startTurn refreshes frozenTerritories to blizzardSchedule[1] on round 2 start', () => {
+    let seq = 0;
+    const seqRng = () => ((seq++) * 13 + 7) % 42 / 42;
+    const base = createInitialState(['P1', 'P2'], { config: BLIZZARD_CONFIG, rng: seqRng });
+    // Trigger a new round: phase='fortify' + turnPointer=0
+    const after = startTurn({ ...base, phase: 'fortify' as const }, 'P1', 0);
+    expect(after.roundsElapsed).toBe(1);
+    const expectedTiles = base.blizzardSchedule![1]!;
+    for (const t of expectedTiles) {
+      expect(after.frozenTerritories![t as TerritoryId]).toBe(true);
+    }
+    expect(Object.keys(after.frozenTerritories!).length).toBe(expectedTiles.length);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2-Player Neutral
+// ---------------------------------------------------------------------------
+
+describe('twoplayer neutral', () => {
+  const TWO_CONFIG = { ...DEFAULT_CONFIG, mode: 'twoplayer' as const };
+
+  it('createInitialState adds Neutral as a 3rd player', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, rng: () => 0.5 });
+    const ids = state.players.map((p) => p.id);
+    expect(ids).toContain(NEUTRAL_ID);
+    expect(ids.length).toBe(3);
+  });
+
+  it('territories are split ~14/14/14 in twoplayer mode', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, rng: () => 0.5 });
+    const neutralCount = ALL_TERRITORY_IDS.filter((id) => state.owner[id] === NEUTRAL_ID).length;
+    // With rng=0.5 the distribution is round-robin; each of 3 players gets 14 territories
+    expect(neutralCount).toBe(14);
+  });
+
+  it('Neutral has 0 setupRemaining', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, setup: true, rng: () => 0.5 });
+    expect(state.setupRemaining[NEUTRAL_ID]).toBe(0);
+  });
+
+  it('real players have 26 armies to place in setup (40 - 14 dealt)', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, setup: true, rng: () => 0.5 });
+    expect(state.setupRemaining['P1']).toBe(26);
+    expect(state.setupRemaining['P2']).toBe(26);
+  });
+
+  it('calcReinforcements returns 0 for Neutral', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG });
+    expect(calcReinforcements(state, NEUTRAL_ID)).toBe(0);
+  });
+
+  it('nextAlivePointer skips Neutral', () => {
+    // Players: [P1(0), P2(1), Neutral(2)]. After P2's turn, next should be P1 (not Neutral).
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG });
+    const atP2 = { ...state, turnPointer: 1 };
+    const next = nextAlivePointer(atP2);
+    expect(state.players[next]?.id).toBe('P1');
+    expect(state.players[next]?.id).not.toBe(NEUTRAL_ID);
+  });
+
+  it('checkWin returns the last real player when the other is eliminated', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG });
+    // Mark P2 as eliminated (alive: false)
+    const eliminated = {
+      ...state,
+      players: state.players.map((p) => p.id === 'P2' ? { ...p, alive: false } : p),
+    };
+    expect(checkWin(eliminated)).toBe('P1');
+  });
+
+  it('checkWin does not trigger when Neutral is eliminated (only real players matter)', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG });
+    // Mark Neutral as eliminated; both real players still alive → no winner yet.
+    const neutralGone = {
+      ...state,
+      players: state.players.map((p) => p.id === NEUTRAL_ID ? { ...p, alive: false } : p),
+    };
+    expect(checkWin(neutralGone)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Secret Assassin
+// ---------------------------------------------------------------------------
+
+describe('assassin', () => {
+  const ASSASSIN_CONFIG = { ...DEFAULT_CONFIG, mode: 'assassin' as const };
+
+  /** Build an attack-ready state with specific ownership and assassin targets. */
+  function makeAssassinState(opts: {
+    playerIds: string[];
+    turPointer: number;
+    targets: Record<string, string>;
+    /** Each entry: [owner, territory, armies]. If not listed, armies default to 3. */
+    ownership: Array<[string, TerritoryId, number]>;
+  }): GameState {
+    const base = createInitialState(opts.playerIds as PlayerId[]);
+    const owner = { ...base.owner };
+    const armies: Record<TerritoryId, number> = {} as Record<TerritoryId, number>;
+    for (const id of ALL_TERRITORY_IDS) armies[id] = 3;
+
+    // Assign ownership/armies
+    for (const id of ALL_TERRITORY_IDS) owner[id] = opts.playerIds[0] as PlayerId;
+    for (const [pid, tid, n] of opts.ownership) {
+      owner[tid] = pid as PlayerId;
+      armies[tid] = n;
+    }
+
+    return {
+      ...base,
+      config: ASSASSIN_CONFIG,
+      phase: 'attack' as const,
+      turnPointer: opts.turPointer,
+      owner,
+      armies,
+      assassinTargets: opts.targets as Readonly<Record<PlayerId, PlayerId>>,
+    };
+  }
+
+  it('createInitialState builds a circular chain in assassin mode', () => {
+    const state = createInitialState(['P1', 'P2', 'P3'], { config: ASSASSIN_CONFIG, rng: () => 0.5 });
+    const targets = state.assassinTargets!;
+    expect(Object.keys(targets).length).toBe(3);
+    // Walk the chain: it must visit all 3 players and return to the start.
+    let cur = 'P1';
+    for (let i = 0; i < 3; i++) {
+      expect(targets[cur]).toBeDefined();
+      expect(targets[cur]).not.toBe(cur); // no self-targeting
+      cur = targets[cur]!;
+    }
+    expect(cur).toBe('P1'); // full cycle
+  });
+
+  it('player wins immediately when they eliminate their target', () => {
+    // P1 (turnPointer=0) targets P2. P2's only territory = northwest-territory (1 army).
+    const state = makeAssassinState({
+      playerIds: ['P1', 'P2'],
+      turPointer: 0,
+      targets: { P1: 'P2', P2: 'P1' },
+      ownership: [['P2', 'northwest-territory', 1]],
+    });
+    const result = applyAttack(state, {
+      type: 'ATTACK',
+      from: 'alaska',
+      to: 'northwest-territory',
+      attackerRolls: [6, 5],
+      defenderRolls: [1],
+      moveOnCapture: 2,
+    });
+    expect(result.winner).toBe('P1');
+  });
+
+  it('no win when player eliminates a non-target', () => {
+    // P1's target is P3, not P2. P1 eliminates P2 → no win.
+    const state = makeAssassinState({
+      playerIds: ['P1', 'P2', 'P3'],
+      turPointer: 0,
+      targets: { P1: 'P3', P2: 'P1', P3: 'P2' },
+      ownership: [['P2', 'northwest-territory', 1]],
+    });
+    const result = applyAttack(state, {
+      type: 'ATTACK',
+      from: 'alaska',
+      to: 'northwest-territory',
+      attackerRolls: [6, 5],
+      defenderRolls: [1],
+      moveOnCapture: 2,
+    });
+    expect(result.winner).toBeNull();
+  });
+
+  it('target chain reassigns when victim is eliminated by a non-targeting player', () => {
+    // Chain: P1→P2, P2→P3, P3→P1. P3 (turnPointer=2) eliminates P2 (not P3's target P1).
+    // P1 was targeting P2; after P2 is gone, P1 inherits P2's target = P3.
+    const state = makeAssassinState({
+      playerIds: ['P1', 'P2', 'P3'],
+      turPointer: 2,        // P3 is current
+      targets: { P1: 'P2', P2: 'P3', P3: 'P1' },
+      ownership: [
+        ['P3', 'alaska', 3],            // P3 attacks from alaska
+        ['P2', 'northwest-territory', 1], // P2's only territory
+      ],
+    });
+    const result = applyAttack(state, {
+      type: 'ATTACK',
+      from: 'alaska',
+      to: 'northwest-territory',
+      attackerRolls: [6, 5],
+      defenderRolls: [1],
+      moveOnCapture: 2,
+    });
+    expect(result.winner).toBeNull();
+    expect(result.assassinTargets!['P1']).toBe('P3');   // inherited P2→P3
+    expect(result.assassinTargets!['P3']).toBe('P1');   // unchanged
+    expect(result.assassinTargets!['P2']).toBeUndefined(); // removed
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Teams
+// ---------------------------------------------------------------------------
+
+describe('teams', () => {
+  const TEAMS_CONFIG = { ...DEFAULT_CONFIG, numOpponents: 3, teams: '2v2' as const };
+
+  it('createInitialState assigns even-index players to A and odd-index to B', () => {
+    const state = createInitialState(['P1', 'P2', 'P3', 'P4'], { config: TEAMS_CONFIG });
+    expect(state.teamAssignments!['P1']).toBe('A');
+    expect(state.teamAssignments!['P2']).toBe('B');
+    expect(state.teamAssignments!['P3']).toBe('A');
+    expect(state.teamAssignments!['P4']).toBe('B');
+  });
+
+  it('validateAttack rejects an attack on a teammate territory', () => {
+    const base = createInitialState(['P1', 'P2']);
+    const teamState: GameState = {
+      ...base,
+      config: TEAMS_CONFIG,
+      phase: 'attack' as const,
+      owner: { ...base.owner, alaska: 'P1', 'northwest-territory': 'P3' },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      players: [
+        { id: 'P1', color: 'red', cards: [], alive: true },
+        { id: 'P2', color: 'blue', cards: [], alive: true },
+        { id: 'P3', color: 'green', cards: [], alive: true },
+        { id: 'P4', color: 'yellow', cards: [], alive: true },
+      ],
+      teamAssignments: { P1: 'A', P2: 'B', P3: 'A', P4: 'B' },
+    };
+    expect(validateAttack(teamState, 'alaska', 'northwest-territory').ok).toBe(false);
+  });
+
+  it('validateAttack allows an attack on an enemy territory', () => {
+    const base = createInitialState(['P1', 'P2']);
+    const teamState: GameState = {
+      ...base,
+      config: TEAMS_CONFIG,
+      phase: 'attack' as const,
+      owner: { ...base.owner, alaska: 'P1', 'northwest-territory': 'P2' },
+      players: [
+        { id: 'P1', color: 'red', cards: [], alive: true },
+        { id: 'P2', color: 'blue', cards: [], alive: true },
+        { id: 'P3', color: 'green', cards: [], alive: true },
+        { id: 'P4', color: 'yellow', cards: [], alive: true },
+      ],
+      teamAssignments: { P1: 'A', P2: 'B', P3: 'A', P4: 'B' },
+    };
+    expect(validateAttack(teamState, 'alaska', 'northwest-territory').ok).toBe(true);
+  });
+
+  it('checkWin fires when one team is fully eliminated', () => {
+    const state = createInitialState(['P1', 'P2'], { config: TEAMS_CONFIG });
+    // Mark Team B players as eliminated
+    const eliminated: GameState = {
+      ...state,
+      players: state.players.map((p) =>
+        state.teamAssignments![p.id] === 'B' ? { ...p, alive: false } : p,
+      ),
+      teamAssignments: { P1: 'A', P2: 'B', P3: 'A', P4: 'B' },
+    };
+    const winner = checkWin(eliminated);
+    expect(winner).not.toBeNull();
+    // Winner should be on Team A
+    expect(eliminated.teamAssignments![winner!]).toBe('A');
+  });
+
+  it('checkWin returns null when both teams still have alive players', () => {
+    const state = createInitialState(['P1', 'P2', 'P3', 'P4'], { config: TEAMS_CONFIG });
+    expect(checkWin(state)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zombies mode
+// ---------------------------------------------------------------------------
+
+describe('zombies mode', () => {
+  const ZOMBIE_CONFIG = { ...DEFAULT_CONFIG, mode: 'zombies' as const };
+
+  it('createInitialState injects Zombie as an extra player', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    expect(s.players.some((p) => p.id === ZOMBIE_ID)).toBe(true);
+    // 2 real players + Zombie pseudo-player
+    expect(s.players.length).toBe(3);
+  });
+
+  it('Zombie starts with roughly equal territory share', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const zombieTerrs = ALL_TERRITORY_IDS.filter((id) => s.owner[id] === ZOMBIE_ID);
+    // With 3 "players" sharing 42 territories, each gets 14.
+    expect(zombieTerrs.length).toBe(14);
+  });
+
+  it('calcReinforcements returns 0 for the Zombie pseudo-player', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    expect(calcReinforcements(s, ZOMBIE_ID)).toBe(0);
+  });
+
+  it('nextAlivePointer skips the Zombie player', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    // Players array: [P1(0), P2(1), Zombie(2)]
+    // From P2 (turnPointer=1), wrap should return P1(0), not Zombie(2).
+    const atP2 = { ...s, turnPointer: 1 };
+    const ptr = nextAlivePointer(atP2);
+    expect(s.players[ptr]?.id).toBe('P1');
+  });
+
+  it('applyZombieTurn reinforces zombie territories (+1 army each)', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    // Give Zombie a single territory with 3 armies and no viable attack (island with no neighbours).
+    // Use western-australia which only connects to eastern-australia and new-guinea.
+    // Override all neighbours to also be zombie so no spread occurs.
+    const zombieState: GameState = {
+      ...s,
+      phase: 'reinforce' as const,
+      owner: {
+        ...s.owner,
+        'western-australia': ZOMBIE_ID,
+        'eastern-australia': ZOMBIE_ID,
+        'new-guinea': ZOMBIE_ID,
+        indonesia: ZOMBIE_ID,
+      },
+      armies: {
+        ...s.armies,
+        'western-australia': 3,
+        'eastern-australia': 3,
+        'new-guinea': 3,
+        indonesia: 3,
+      },
+    };
+    const mockRng = () => 0.5;
+    const after = applyZombieTurn(zombieState, mockRng);
+    // Each zombie territory should gain +1 army.
+    expect(after.armies['western-australia']).toBe(4);
+    expect(after.armies['eastern-australia']).toBe(4);
+  });
+
+  it('applyZombieTurn captures an adjacent territory and applies infect-half', () => {
+    // alaska (zombie, 4 armies) adj northwest-territory (P1, 1 army).
+    // After reinforce zombie has 5. With winning dice: capture happens.
+    // Infect-half: ceil(1/2) = 1 army on captured territory.
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const zombieState: GameState = {
+      ...s,
+      phase: 'attack' as const,
+      owner: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 'P1'])) as Record<TerritoryId, PlayerId>,
+        alaska: ZOMBIE_ID,
+      },
+      armies: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 1])) as Record<TerritoryId, number>,
+        alaska: 4,
+        'northwest-territory': 1,
+      },
+      players: [
+        { id: 'P1', color: 'red', cards: [], alive: true },
+        { id: 'P2', color: 'blue', cards: [], alive: true },
+        { id: ZOMBIE_ID, color: '#4a7a40', cards: [], alive: true },
+      ],
+    };
+    // Roll sequence: attacker (3 dice) then defender (1 die). High zombie, low P1.
+    const rollSeq = [0.99, 0.99, 0.99, 0.01];
+    let callIdx = 0;
+    const mockRng = () => rollSeq[callIdx++] ?? 0.5;
+
+    const after = applyZombieTurn(zombieState, mockRng);
+    expect(after.owner['northwest-territory']).toBe(ZOMBIE_ID);
+    // infect-half of original 1-army defender: ceil(1/2) = 1
+    expect(after.armies['northwest-territory']).toBe(1);
+  });
+
+  it('applyZombieTurn infects ceil(defenderArmies / 2) on capture', () => {
+    // alaska (zombie, 5 armies → 6 after reinforce) adj northwest-territory (P1, 2 armies).
+    // With winning dice → capture. infect = ceil(2/2) = 1.
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const zombieState: GameState = {
+      ...s,
+      phase: 'attack' as const,
+      owner: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 'P1'])) as Record<TerritoryId, PlayerId>,
+        alaska: ZOMBIE_ID,
+      },
+      armies: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 1])) as Record<TerritoryId, number>,
+        alaska: 5,
+        'northwest-territory': 2,
+      },
+      players: [
+        { id: 'P1', color: 'red', cards: [], alive: true },
+        { id: 'P2', color: 'blue', cards: [], alive: true },
+        { id: ZOMBIE_ID, color: '#4a7a40', cards: [], alive: true },
+      ],
+    };
+    // Attacker rolls high, defender rolls low → zombie wins both pairs.
+    const rollSeq = [0.99, 0.99, 0.99, 0.01, 0.01];
+    let callIdx = 0;
+    const mockRng = () => rollSeq[callIdx++] ?? 0.5;
+
+    const after = applyZombieTurn(zombieState, mockRng);
+    if (after.owner['northwest-territory'] === ZOMBIE_ID) {
+      expect(after.armies['northwest-territory']).toBe(1); // ceil(2/2)
+    }
+  });
+
+  it('applyZombieTurn eliminates a player who loses their last territory', () => {
+    // P2 owns only northwest-territory (1 army). Zombie owns alaska (8 armies).
+    // alaska's neighbours are [northwest-territory, kamchatka] in order.
+    // Provide winning rolls for each attack: 3 attacker + 1 defender dice per attack.
+    // High zombie dice → captures all reachable territories → P2 (northwest-territory) eliminated.
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const zombieState: GameState = {
+      ...s,
+      phase: 'attack' as const,
+      owner: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 'P1'])) as Record<TerritoryId, PlayerId>,
+        alaska: ZOMBIE_ID,
+        'northwest-territory': 'P2',
+      },
+      armies: {
+        ...Object.fromEntries(ALL_TERRITORY_IDS.map((id) => [id, 1])) as Record<TerritoryId, number>,
+        alaska: 8,
+        'northwest-territory': 1,
+      },
+      players: [
+        { id: 'P1', color: 'red', cards: [], alive: true },
+        { id: 'P2', color: 'blue', cards: [], alive: true },
+        { id: ZOMBIE_ID, color: '#4a7a40', cards: [], alive: true },
+      ],
+    };
+    // Enough winning rolls for all of alaska's neighbours (up to 3 attacks × 4 rolls each).
+    const rollSeq = Array(12).fill(0).map((_, i) => i % 4 === 3 ? 0.01 : 0.99);
+    let callIdx = 0;
+    const mockRng = () => rollSeq[callIdx++] ?? 0.5;
+
+    const after = applyZombieTurn(zombieState, mockRng);
+    // Northwest-territory should be zombie-owned and P2 eliminated.
+    expect(after.owner['northwest-territory']).toBe(ZOMBIE_ID);
+    expect(after.players.find((p) => p.id === 'P2')?.alive).toBe(false);
+  });
+
+  it('checkWin returns last real player when opponent is eliminated', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const eliminated: GameState = {
+      ...s,
+      players: s.players.map((p) => p.id === 'P2' ? { ...p, alive: false } : p),
+    };
+    expect(checkWin(eliminated)).toBe('P1');
+  });
+
+  it('checkWin returns null when both real players are alive', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    expect(checkWin(s)).toBeNull();
+  });
+
+  it('checkWin returns ZOMBIE_ID when all real players are eaten', () => {
+    const s = createInitialState(['P1', 'P2'], { config: ZOMBIE_CONFIG });
+    const allEaten: GameState = {
+      ...s,
+      players: s.players.map((p) => p.id === ZOMBIE_ID ? p : { ...p, alive: false }),
+    };
+    expect(checkWin(allEaten)).toBe(ZOMBIE_ID);
   });
 });

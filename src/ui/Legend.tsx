@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { CONTINENTS, type ContinentId } from '../engine/map';
 import { tradeInValue } from '../engine/cards';
 import type { GameState } from '../engine/state';
 import { CONTINENT_TINT } from './territory-shapes';
@@ -8,10 +7,11 @@ interface Props {
   state: GameState;
 }
 
-// Display order mirrors the board (NA, SA, EU, AF, AS, AU).
-const CONTINENT_ORDER: ContinentId[] = ['NA', 'SA', 'EU', 'AF', 'AS', 'AU'];
+const TINT = CONTINENT_TINT as Record<string, string>;
 
 export function Legend({ state }: Props) {
+  // Continents come from the active board, so the key reflects whichever map is in play.
+  const continents = Object.values(state.map.continents);
   const [open, setOpen] = useState(true);
 
   // Next 7 trade-in values starting from the current global counter.
@@ -30,17 +30,17 @@ export function Legend({ state }: Props) {
       {open && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', marginTop: 6 }}>
-            {CONTINENT_ORDER.map((cid) => (
-              <div key={cid} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {continents.map((c) => (
+              <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{
                   width: 11, height: 11, borderRadius: 3, flexShrink: 0,
-                  background: CONTINENT_TINT[cid], border: '1px solid rgba(0,0,0,0.4)',
+                  background: TINT[c.id] ?? '#8893a3', border: '1px solid rgba(0,0,0,0.4)',
                 }} />
                 <span style={{ fontSize: 11, color: '#c8d0da', whiteSpace: 'nowrap' }}>
-                  {CONTINENTS[cid].name}
+                  {c.name}
                 </span>
                 <span style={{ fontSize: 11, color: '#7ed98b', fontWeight: 700, marginLeft: 'auto' }}>
-                  +{CONTINENTS[cid].bonus}
+                  +{c.bonus}
                 </span>
               </div>
             ))}

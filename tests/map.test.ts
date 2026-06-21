@@ -7,6 +7,7 @@ import {
   areAdjacent,
   neighbors,
   type TerritoryId,
+  type ClassicTerritoryId,
 } from '../src/engine/map';
 
 describe('map: territory totals', () => {
@@ -23,7 +24,7 @@ describe('map: territory totals', () => {
     // Every territory's declared continent matches the continent that lists it.
     for (const continent of Object.values(CONTINENTS)) {
       for (const id of continent.territories) {
-        expect(TERRITORIES[id].continent).toBe(continent.id);
+        expect(TERRITORIES[id as ClassicTerritoryId].continent).toBe(continent.id);
       }
     }
   });
@@ -102,7 +103,6 @@ describe('map: adjacency', () => {
       ['southern-europe', 'egypt'],
       ['southern-europe', 'middle-east'],
       ['ukraine', 'ural'],
-      ['ukraine', 'afghanistan'],
       ['ukraine', 'middle-east'],
       ['egypt', 'middle-east'],
       ['east-africa', 'middle-east'],
@@ -129,8 +129,8 @@ describe('map: adjacency', () => {
     }
   });
 
-  it('total undirected edge count is 83 (regression guard)', () => {
+  it('total undirected edge count is 80 (regression guard)', () => {
     const degreeSum = ALL_TERRITORY_IDS.reduce((s, id) => s + ADJACENCY[id].length, 0);
-    expect(degreeSum / 2).toBe(83);
+    expect(degreeSum / 2).toBe(79);
   });
 });

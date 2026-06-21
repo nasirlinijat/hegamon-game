@@ -4,6 +4,7 @@ import { ALL_TERRITORY_IDS, type TerritoryId } from '../src/engine/map';
 import { reduce } from '../src/engine/actions';
 import { type Rng } from '../src/engine/dice';
 import { chooseAction } from '../src/engine/ai';
+import { type AiDifficulty } from '../src/engine/modes';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -327,5 +328,111 @@ describe('AI-vs-AI full game', () => {
     // With a 10-army head start and attacker-wins dice, P1 should dominate.
     expect(state.winner).not.toBeNull();
     expect(actionCount).toBeLessThan(MAX);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI Difficulty — Easy
+// ---------------------------------------------------------------------------
+
+describe('AI Difficulty — Easy', () => {
+  function easyState(s: GameState): GameState {
+    return { ...s, config: { ...s.config, aiDifficulty: 'easy' as AiDifficulty } };
+  }
+
+  it('skips attack when army advantage < 3', () => {
+    // P1 owns all except northwest-territory and alberta; alaska (4) vs both (2 each) → advantage 2.
+    const excluded = new Set(['northwest-territory', 'alberta']);
+    const p1Terrs = ALL_TERRITORY_IDS.filter((id) => !excluded.has(id)) as TerritoryId[];
+    const state = easyState(buildState(p1Terrs, {
+      phase: 'attack',
+      armiesOverride: { alaska: 4, 'northwest-territory': 2, alberta: 2 },
+    }));
+    const action = chooseAction(state, fixedRng(0.5));
+    // alaska's best advantage = 4-2 = 2 < 3 → END_PHASE
+    expect(action.type).toBe('END_PHASE');
+  });
+
+  it('attacks when army advantage >= 3', () => {
+    // alaska (5) vs northwest-territory (2) → advantage 3 → Easy should attack.
+    const p1Terrs = ALL_TERRITORY_IDS.filter((id) => id !== 'northwest-territory') as TerritoryId[];
+    const state = easyState(buildState(p1Terrs, {
+      phase: 'attack',
+      armiesOverride: { alaska: 5, 'northwest-territory': 2 },
+    }));
+    const action = chooseAction(state, seqRng([0.99, 0.99, 0.99, 0.0, 0.0]));
+    expect(action.type).toBe('ATTACK');
+  });
+
+  it('spreads reinforcements — places exactly 1 army per action', () => {
+    const state = easyState(buildState(['alaska', 'kamchatka'], {
+      phase: 'reinforce',
+      reinforcementsRemaining: 5,
+    }));
+    const action = chooseAction(state, fixedRng(0.5));
+    if (action.type !== 'REINFORCE') throw new Error('expected REINFORCE');
+    expect(action.count).toBe(1);
+  });
+
+  it('skips fortify even when a valid interior→border move exists', () => {
+    const AU = ['eastern-australia', 'western-australia', 'new-guinea', 'indonesia'] as TerritoryId[];
+    const state = easyState(buildState(AU, {
+      phase: 'fortify',
+      armiesOverride: { 'new-guinea': 6, indonesia: 1, 'eastern-australia': 3, 'western-australia': 3 },
+    }));
+    const action = chooseAction(state, fixedRng(0.5));
+    expect(action.type).toBe('END_PHASE');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AI Difficulty — Hard
+// ---------------------------------------------------------------------------
+
+describe('AI Difficulty — Hard', () => {
+  function hardState(s: GameState): GameState {
+    return { ...s, config: { ...s.config, aiDifficulty: 'hard' as AiDifficulty } };
+  }
+
+  it('proactively trades a valid set during reinforce phase (without being forced)', () => {
+    const cards: Card[] = [
+      { type: 'infantry', territory: 'alaska' },
+      { type: 'infantry', territory: 'kamchatka' },
+      { type: 'infantry', territory: 'irkutsk' },
+    ];
+    const state = hardState(buildState(['alaska'], {
+      phase: 'reinforce',
+      reinforcementsRemaining: 3,
+      p1Cards: cards,
+      mustTradeCards: false,
+    }));
+    const action = chooseAction(state, fixedRng(0.5));
+    expect(action.type).toBe('TRADE_IN');
+    expect(() => reduce(state, action)).not.toThrow();
+  });
+
+  it('targets continent-completing territory for reinforcement', () => {
+    // P1 owns 3/4 of Australia (missing western-australia).
+    // Hard AI should pick one of the owned AU territories adjacent to western-australia.
+    const state = hardState(buildState(
+      ['eastern-australia', 'new-guinea', 'indonesia'],
+      { phase: 'reinforce', reinforcementsRemaining: 5 },
+    ));
+    const action = chooseAction(state, fixedRng(0.5));
+    if (action.type !== 'REINFORCE') throw new Error('expected REINFORCE');
+    // All three owned AU territories are adjacent to the missing western-australia.
+    const validTargets = ['eastern-australia', 'new-guinea', 'indonesia'];
+    expect(validTargets).toContain(action.territory);
+  });
+
+  it('attacks when armies are equal (advantage = 0)', () => {
+    // P1: alaska (3) vs northwest-territory (3) → advantage 0 → Hard attacks.
+    const p1Terrs = ALL_TERRITORY_IDS.filter((id) => id !== 'northwest-territory') as TerritoryId[];
+    const state = hardState(buildState(p1Terrs, {
+      phase: 'attack',
+      armiesOverride: { alaska: 3, 'northwest-territory': 3 },
+    }));
+    const action = chooseAction(state, seqRng([0.99, 0.99, 0.99, 0.0, 0.0]));
+    expect(action.type).toBe('ATTACK');
   });
 });

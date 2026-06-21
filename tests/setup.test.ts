@@ -8,6 +8,7 @@ import {
 import { reduce, type Action } from '../src/engine/actions';
 import { chooseAction } from '../src/engine/ai';
 import { ALL_TERRITORY_IDS } from '../src/engine/map';
+import { DEFAULT_CONFIG, type GameConfig } from '../src/engine/modes';
 
 function totalArmies(s: GameState): number {
   return ALL_TERRITORY_IDS.reduce((sum, id) => sum + (s.armies[id] ?? 0), 0);
@@ -46,6 +47,31 @@ describe('setup — initial deal', () => {
     const ids = Array.from({ length: 7 }, (_, i) => `P${i}`);
     expect(() => createInitialState(ids, { setup: true })).toThrow();
   });
+
+  it('assigns every territory to exactly one player and keeps counts even', () => {
+    const ids = ['You', 'CPU 1', 'CPU 2'];
+    const s = createInitialState(ids, { setup: true, rng: () => 0.42 });
+    // Every territory owned by one of the players (no gaps).
+    expect(ALL_TERRITORY_IDS.every((id) => ids.includes(s.owner[id]!))).toBe(true);
+    // Round-robin over the shuffled order keeps shares within 1 of each other (42 / 3 = 14 each).
+    const counts = ids.map((pid) => ALL_TERRITORY_IDS.filter((id) => s.owner[id] === pid).length);
+    expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(42);
+  });
+
+  it('deal is randomized: different RNG → different layout; same RNG → identical', () => {
+    const ids = ['You', 'CPU 1'];
+    let n1 = 0; const rngA = () => (n1++ % 2 === 0 ? 0.9 : 0.1);
+    let n2 = 0; const rngB = () => (n2++ % 2 === 0 ? 0.9 : 0.1);
+    let n3 = 0; const rngC = () => (n3++ % 3 === 0 ? 0.2 : 0.8);
+    const a = createInitialState(ids, { setup: true, rng: rngA });
+    const b = createInitialState(ids, { setup: true, rng: rngB });
+    const c = createInitialState(ids, { setup: true, rng: rngC });
+    // Same RNG sequence → identical deal (deterministic).
+    expect(ALL_TERRITORY_IDS.map((id) => a.owner[id])).toEqual(ALL_TERRITORY_IDS.map((id) => b.owner[id]));
+    // Different RNG → at least one territory changes hands (not a fixed round-robin).
+    expect(ALL_TERRITORY_IDS.some((id) => a.owner[id] !== c.owner[id])).toBe(true);
+  });
 });
 
 describe('setup — placement', () => {
@@ -79,6 +105,34 @@ describe('setup — placement', () => {
     const s = createInitialState(['A', 'B'], { setup: true });
     expect(() => reduce(s, { type: 'END_PHASE' })).toThrow();
     expect(() => reduce(s, { type: 'FORTIFY', from: 'alaska', to: 'alberta', count: 1 })).toThrow();
+  });
+
+  describe('batch placement', () => {
+    const BATCH: GameConfig = { ...DEFAULT_CONFIG, placement: 'batch' };
+
+    it('keeps the current player placing until their pool is empty, then passes', () => {
+      const s = createInitialState(['A', 'B'], { setup: true, config: BATCH, rng: () => 0 });
+      const aTerr = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'A')!;
+      const pool = s.setupRemaining['A']!;
+
+      // Partial placement → still A's turn.
+      const s1 = reduce(s, { type: 'REINFORCE', territory: aTerr, count: 1 });
+      expect(s1.players[s1.turnPointer]!.id).toBe('A');
+      expect(s1.setupRemaining['A']).toBe(pool - 1);
+
+      // Empty the pool → play passes to B.
+      const s2 = reduce(s1, { type: 'REINFORCE', territory: aTerr, count: pool - 1 });
+      expect(s2.setupRemaining['A']).toBe(0);
+      expect(s2.players[s2.turnPointer]!.id).toBe('B');
+      expect(s2.phase).toBe('setup');
+    });
+
+    it('step placement still passes after a single army (regression)', () => {
+      const s = createInitialState(['A', 'B'], { setup: true }); // default = step
+      const aTerr = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'A')!;
+      const next = reduce(s, { type: 'REINFORCE', territory: aTerr, count: 1 });
+      expect(next.players[next.turnPointer]!.id).toBe('B');
+    });
   });
 });
 
