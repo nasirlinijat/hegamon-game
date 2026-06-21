@@ -56,8 +56,8 @@ export type DiceMode = 'balanced' | 'random';
 export type AiDifficulty = 'easy' | 'normal' | 'hard';
 /** Team mode: 'off' = free-for-all; '2v2' = 4 players 2 teams; '3v3' = 6 players 2 teams. */
 export type TeamsMode = 'off' | '2v2' | '3v3';
-/** Selectable board. 'classic' = standard 42-territory world; 'imperial' = the 70-territory world. */
-export type MapId = 'classic' | 'imperial';
+/** Selectable board. 'classic'/'imperial' are real-world; the rest are imaginary boards. */
+export type MapId = 'classic' | 'imperial' | 'verdantia' | 'isles' | 'longmarch' | 'twincrowns';
 
 export interface GameConfig {
   readonly mode: GameMode;

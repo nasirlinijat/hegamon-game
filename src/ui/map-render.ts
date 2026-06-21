@@ -7,8 +7,16 @@
 
 import { CLASSIC_MAP, type GameMap, type TerritoryId } from '../engine/map';
 import { IMPERIAL_MAP } from '../engine/imperial-map';
+import { VERDANTIA_MAP } from '../engine/verdantia-map';
+import { ISLES_MAP } from '../engine/isles-map';
+import { LONGMARCH_MAP } from '../engine/longmarch-map';
+import { TWINCROWNS_MAP } from '../engine/twincrowns-map';
 import * as classicGeo from './map-geometry';
 import * as imperialGeo from './map-geometry-imperial';
+import * as verdantiaGeo from './map-geometry-verdantia';
+import * as islesGeo from './map-geometry-isles';
+import * as longmarchGeo from './map-geometry-longmarch';
+import * as twincrownsGeo from './map-geometry-twincrowns';
 
 export interface Connector { x1: number; y1: number; x2: number; y2: number; c?: number }
 export interface WrapStub { from: TerritoryId; toEdge: number; label: string }
@@ -209,6 +217,22 @@ const IMPERIAL: MapRender = build(imperialGeo, IMPERIAL_MAP, {
   },
 });
 
+// Imaginary boards: territories tile each continent (sharing exact Voronoi borders), so the shared-
+// vertex test (touchGrid) suppresses all internal connectors; only cross-continent sea routes draw a
+// line. Generated coords are rounded to 0.1px, so a touchGrid of 2 reliably catches shared borders.
+const FANTASY_TUNING = { touchGrid: 2, gapThreshold: 4, sampleCap: 2000 } as const;
+const VERDANTIA: MapRender  = build(verdantiaGeo,  VERDANTIA_MAP,  FANTASY_TUNING);
+const ISLES: MapRender      = build(islesGeo,      ISLES_MAP,      FANTASY_TUNING);
+const LONGMARCH: MapRender  = build(longmarchGeo,  LONGMARCH_MAP,  FANTASY_TUNING);
+const TWINCROWNS: MapRender = build(twincrownsGeo, TWINCROWNS_MAP, FANTASY_TUNING);
+
 export function getMapRender(mapId: string): MapRender {
-  return mapId === 'imperial' ? IMPERIAL : CLASSIC;
+  switch (mapId) {
+    case 'imperial':   return IMPERIAL;
+    case 'verdantia':  return VERDANTIA;
+    case 'isles':      return ISLES;
+    case 'longmarch':  return LONGMARCH;
+    case 'twincrowns': return TWINCROWNS;
+    default:           return CLASSIC;
+  }
 }

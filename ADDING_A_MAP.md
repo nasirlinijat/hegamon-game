@@ -5,6 +5,15 @@ add a brand-new playable board from a reference image. It documents the full pip
 non-obvious issue we hit building the **Imperial World** (79 territories) board, with the fix baked
 in so you don't re-hit them.
 
+> **Imaginary (non-real-world) boards** take a different path — they are generated procedurally, not
+> from Natural Earth. See `scripts/build-fantasy-maps.mjs` + `scripts/fantasy-map-specs.mjs`: each
+> continent is an organic "blob" carved into territories by a Lloyd-relaxed **Voronoi** diagram, so
+> territories tile each continent and **adjacency is derived from shared borders** (visuals and graph
+> always fit). The script emits *both* the engine module and the geometry module. To add one, append a
+> spec (continent blobs + sea-route `links`) and run `node scripts/build-fantasy-maps.mjs`, then
+> register it exactly as below (`MapId`, `MAPS`, a `map-render` bundle with `touchGrid: 2`, and the
+> board selector). Verdantia / Sundered Isles / Long March / Twin Crowns are worked examples.
+
 There are two worked examples in the repo — read them before starting; you will copy their shape:
 
 | Concern | Classic (42 territories) | Imperial (79 territories) |
