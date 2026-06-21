@@ -390,6 +390,8 @@ export interface BlitzResult {
   readonly state: GameState;
   readonly rounds: readonly BlitzRound[];
   readonly captured: boolean;
+  /** The exact ATTACK actions applied, in order — replayable through reduce() (e.g. over a network). */
+  readonly actions: readonly Action[];
 }
 
 /**
@@ -418,6 +420,7 @@ export function resolveBlitz(
   const floor = Math.max(1, keepBehind);
   let cur = state;
   const rounds: BlitzRound[] = [];
+  const actions: Action[] = [];
   let captured = false;
 
   // Bounded by the defender's army count and the reserve floor: each round removes ≥0 and the
@@ -442,12 +445,13 @@ export function resolveBlitz(
     }
     cur = applyAttack(cur, action);
     rounds.push({ attackerRolls, defenderRolls, attackerLosses, defenderLosses, captured: willCapture });
+    actions.push(action);
 
     if (willCapture) { captured = true; break; }
     if (cur.winner !== null) break;
   }
 
-  return { state: cur, rounds, captured };
+  return { state: cur, rounds, captured, actions };
 }
 
 // --- Fortify ---

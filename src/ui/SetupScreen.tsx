@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { startingArmiesForMap } from '../engine/state';
-import { DEFAULT_CONFIG, type GameConfig, type AiDifficulty } from '../engine/modes';
+import { DEFAULT_CONFIG, type GameConfig } from '../engine/modes';
 import { getMap } from '../engine/map-registry';
 import { PLAYER_IDS, PLAYER_COLORS } from './App';
 import { Avatar } from './Avatar';
 import {
-  CC, SectionLabel, Divider, segStyle,
+  CC, SectionLabel, Divider,
   GameConfigPanel, useConfigState, buildConfig,
 } from './GameConfigPanel';
 
@@ -35,16 +35,15 @@ function CompassRose() {
 }
 
 export function SetupScreen({ onStart }: Props) {
-  const [cs, setCs]           = useConfigState();
-  const [opponents, setOpps]  = useState(DEFAULT_CONFIG.numOpponents);
-  const [difficulty, setDiff] = useState<AiDifficulty>(DEFAULT_CONFIG.aiDifficulty);
+  const [cs, setCs]          = useConfigState();
+  const [opponents, setOpps] = useState(DEFAULT_CONFIG.numOpponents);
 
   const total          = opponents + 1;
   const startingArmies = startingArmiesForMap(total, getMap(cs.mapId).allTerritoryIds.length);
   const roster         = PLAYER_IDS.slice(0, total);
 
   function handleStart() {
-    const config = buildConfig(cs, opponents, difficulty);
+    const config = buildConfig(cs, opponents);
     // Teams validity: must match player count exactly
     const effectiveTeams = cs.teams === 'off' || (cs.teams === '2v2' && total === 4) || (cs.teams === '3v3' && total === 6)
       ? cs.teams : 'off';
@@ -80,37 +79,20 @@ export function SetupScreen({ onStart }: Props) {
             </div>
 
             {/* Opponents */}
-            <SectionLabel>Commanders</SectionLabel>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
-              <div>
-                <div style={{ fontSize:9, color:CC.textMuted, letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:8 }}>Opponents</div>
-                <div style={{ display:'flex', gap:6 }}>
-                  {[1,2,3,4,5].map(n => {
-                    const active = n === opponents;
-                    return (
-                      <button key={n} className={`setup-num${active?' num-active':''}`} onClick={() => setOpps(n)} style={{
-                        width:40, height:40, borderRadius:8, cursor:'pointer', fontSize:17, fontWeight:800, flexShrink:0,
-                        background: active ? 'rgba(196,146,42,0.16)' : 'rgba(255,255,255,0.04)',
-                        color: active ? CC.goldBrt : CC.textMuted,
-                        border:`1.5px solid ${active ? 'rgba(196,146,42,0.62)' : CC.borderDim}`,
-                        transition:'all .12s',
-                      }}>{n}</button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize:9, color:CC.textMuted, letterSpacing:1.5, textTransform:'uppercase', fontWeight:700, marginBottom:8 }}>AI Difficulty</div>
-                <div style={{ display:'flex', gap:6 }}>
-                  {(['easy','normal','hard'] as AiDifficulty[]).map(d => (
-                    <button key={d} className={`setup-seg${d===difficulty?' seg-active':''}`}
-                      onClick={() => setDiff(d)}
-                      style={segStyle(d===difficulty, d==='hard' ? CC.crimson : undefined)}>
-                      {d.charAt(0).toUpperCase()+d.slice(1)}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <SectionLabel>Opponents</SectionLabel>
+            <div style={{ display:'flex', gap:8, marginBottom:20 }}>
+              {[1,2,3,4,5].map(n => {
+                const active = n === opponents;
+                return (
+                  <button key={n} className={`setup-num${active?' num-active':''}`} onClick={() => setOpps(n)} style={{
+                    flex:1, height:44, borderRadius:8, cursor:'pointer', fontSize:17, fontWeight:800,
+                    background: active ? 'rgba(196,146,42,0.16)' : 'rgba(255,255,255,0.04)',
+                    color: active ? CC.goldBrt : CC.textMuted,
+                    border:`1.5px solid ${active ? 'rgba(196,146,42,0.62)' : CC.borderDim}`,
+                    transition:'all .12s',
+                  }}>{n}</button>
+                );
+              })}
             </div>
 
             <Divider mb={18} />

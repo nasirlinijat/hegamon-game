@@ -583,6 +583,21 @@ describe('resolveBlitz', () => {
     expect(state.armies['northwest-territory']).toBe(3);       // forced up to the 3-dice minimum
     expect(state.armies['alaska']).toBe(1);
   });
+
+  it('returns a replayable action list (online multiplayer relies on this)', () => {
+    // Online blitz sends resolveBlitz().actions to the server, which applies each via reduce().
+    // Replaying those actions must reproduce resolveBlitz's own final state exactly.
+    const s = twoPlayerState(['alaska'], {
+      phase: 'attack',
+      armies: { ...createInitialState(['P1', 'P2']).armies, alaska: 10, 'northwest-territory': 2 } as GameState['armies'],
+    });
+    const { state: finalState, actions, rounds } = resolveBlitz(s, 'alaska', 'northwest-territory', scriptedRng([HI, HI, HI, LO, LO]));
+    expect(actions.length).toBe(rounds.length);
+    const replayed = actions.reduce((acc, a) => reduce(acc, a), s as GameState);
+    expect(replayed.owner['northwest-territory']).toBe(finalState.owner['northwest-territory']);
+    expect(replayed.armies['alaska']).toBe(finalState.armies['alaska']);
+    expect(replayed.armies['northwest-territory']).toBe(finalState.armies['northwest-territory']);
+  });
 });
 
 // ---------------------------------------------------------------------------

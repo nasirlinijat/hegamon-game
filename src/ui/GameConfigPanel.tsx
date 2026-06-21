@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import {
   MODES, DEFAULT_CONFIG,
-  type GameConfig, type CardBonusMode,
+  type GameConfig, type CardBonusMode, type AiDifficulty,
   type PlacementMode, type DiceMode, type GameMode, type TeamsMode, type MapId,
 } from '../engine/modes';
 import { MAP_OPTIONS, getMap } from '../engine/map-registry';
@@ -127,6 +127,7 @@ function ModeIconTile({ meta, selected, onClick }: {
 
 export interface ConfigState {
   mode: GameMode;
+  aiDifficulty: AiDifficulty;
   cardBonus: CardBonusMode;
   placement: PlacementMode;
   fogOfWar: boolean;
@@ -140,29 +141,26 @@ export interface ConfigState {
 
 export function useConfigState(initial?: Partial<ConfigState>): [ConfigState, React.Dispatch<React.SetStateAction<ConfigState>>] {
   return useState<ConfigState>({
-    mode:      initial?.mode      ?? DEFAULT_CONFIG.mode,
-    cardBonus: initial?.cardBonus ?? DEFAULT_CONFIG.cardBonus,
-    placement: initial?.placement ?? DEFAULT_CONFIG.placement,
-    fogOfWar:  initial?.fogOfWar  ?? DEFAULT_CONFIG.fogOfWar,
-    dice:      initial?.dice      ?? DEFAULT_CONFIG.dice,
-    teams:     initial?.teams     ?? DEFAULT_CONFIG.teams,
-    mapId:     initial?.mapId     ?? (DEFAULT_CONFIG.mapId ?? 'classic'),
-    turnTimer: initial?.turnTimer ?? (DEFAULT_CONFIG.turnTimer ?? 0),
-    threshold: initial?.threshold ?? 0.70,
-    turnLimit: initial?.turnLimit ?? 15,
+    mode:         initial?.mode         ?? DEFAULT_CONFIG.mode,
+    aiDifficulty: initial?.aiDifficulty ?? DEFAULT_CONFIG.aiDifficulty,
+    cardBonus:    initial?.cardBonus    ?? DEFAULT_CONFIG.cardBonus,
+    placement:    initial?.placement    ?? DEFAULT_CONFIG.placement,
+    fogOfWar:     initial?.fogOfWar     ?? DEFAULT_CONFIG.fogOfWar,
+    dice:         initial?.dice         ?? DEFAULT_CONFIG.dice,
+    teams:        initial?.teams        ?? DEFAULT_CONFIG.teams,
+    mapId:        initial?.mapId        ?? (DEFAULT_CONFIG.mapId ?? 'classic'),
+    turnTimer:    initial?.turnTimer    ?? (DEFAULT_CONFIG.turnTimer ?? 0),
+    threshold:    initial?.threshold    ?? 0.70,
+    turnLimit:    initial?.turnLimit    ?? 15,
   });
 }
 
-/** Build a GameConfig from ConfigState + SP-specific fields. */
-export function buildConfig(
-  cs: ConfigState,
-  numOpponents: number,
-  aiDifficulty: GameConfig['aiDifficulty'] = 'normal',
-): GameConfig {
+/** Build a GameConfig from ConfigState. */
+export function buildConfig(cs: ConfigState, numOpponents: number): GameConfig {
   return {
     mode: cs.mode,
     numOpponents,
-    aiDifficulty,
+    aiDifficulty: cs.aiDifficulty,
     cardBonus: cs.cardBonus,
     placement: cs.placement,
     fogOfWar: cs.fogOfWar,
@@ -292,6 +290,16 @@ export function GameConfigPanel({ cs, setCs, numPlayers }: GameConfigPanelProps)
       {/* ── Rules ──────────────────────────────────────────── */}
       <SectionLabel>Rules</SectionLabel>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 4 }}>
+        <SettingsRow label="AI Difficulty">
+          {(['easy', 'normal', 'hard'] as AiDifficulty[]).map(opt => (
+            <button key={opt}
+              className={`setup-seg${cs.aiDifficulty === opt ? ' seg-active' : ''}`}
+              onClick={() => set('aiDifficulty', opt)}
+              style={segStyle(cs.aiDifficulty === opt, opt === 'hard' ? CC.crimson : undefined)}>
+              {opt.charAt(0).toUpperCase() + opt.slice(1)}
+            </button>
+          ))}
+        </SettingsRow>
         <SettingsRow label="Card Bonus">
           {(['none', 'fixed', 'progressive', 'nuclear'] as CardBonusMode[]).map(opt => (
             <button key={opt}

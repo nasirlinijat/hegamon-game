@@ -184,8 +184,28 @@ export function App() {
   function runBlitz(from: TerritoryId, to: TerritoryId, keepBehind = 1) {
     const s = stateRef.current;
     const result = resolveBlitz(s, from, to, () => Math.random(), keepBehind, s.config.dice);
-    const { rounds, state: finalState } = result;
+    const { rounds, state: finalState, actions } = result;
     if (rounds.length === 0) return;
+
+    setSelected(null);
+
+    if (isOnline) {
+      // Online: send each precomputed ATTACK action to the server in sequence, spaced out so
+      // the incoming state_update animations (which the server broadcasts per action) play in
+      // order. We don't apply state locally — the authoritative updates drive board + dice.
+      let i = 0;
+      const sendNext = () => {
+        const action = actions[i];
+        if (!action) return;
+        net.sendAction(action);
+        i++;
+        if (i < actions.length) setTimeout(sendNext, 620);
+      };
+      sendNext();
+      return;
+    }
+
+    // Single-player: animate each round locally, then apply the final state.
     const attacker = s.players[s.turnPointer]?.id ?? playerCtxRef.current.myId;
     let i = 0;
     function showNext() {
@@ -211,7 +231,6 @@ export function App() {
         }, 620);
       }
     }
-    setSelected(null);
     showNext();
   }
 
@@ -344,7 +363,7 @@ export function App() {
         setSelected(null);
       } else if (state.owner[id] !== myId) {
         if (!validateAttack(state, selected, id).ok) return;
-        if (blitzMode && !isOnline) {
+        if (blitzMode) {
           const committable = (state.armies[selected] ?? 0) - 1;
           if (committable > 2) {
             setPendingMove({ kind: 'blitz', from: selected, to: id, min: 2, max: committable });
@@ -567,7 +586,7 @@ export function App() {
           selected={selected}
           onEndPhase={onEndPhase}
           blitzMode={blitzMode}
-          {...(!isOnline ? { onToggleBlitz: () => setBlitzMode((b) => !b) } : {})}
+          onToggleBlitz={() => setBlitzMode((b) => !b)}
           secondsLeft={secondsLeft}
         />
         <CornerControls

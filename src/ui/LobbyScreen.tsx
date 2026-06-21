@@ -232,12 +232,13 @@ export function LobbyScreen({ onGameReady, onBack }: Props) {
 function ConfigReadonly({ lobby }: { lobby: LobbyState }) {
   const c = lobby.config;
   const rows: [string, string][] = [
-    ['Mode',       c.mode.charAt(0).toUpperCase() + c.mode.slice(1)],
-    ['Card Bonus', c.cardBonus],
-    ['Placement',  c.placement === 'step' ? 'One-by-one' : 'Batch'],
-    ['Fog of War', c.fogOfWar ? 'On' : 'Off'],
-    ['Dice',       c.dice],
-    ['Turn Timer', c.turnTimer ? `${c.turnTimer}s` : 'Off'],
+    ['Mode',          c.mode.charAt(0).toUpperCase() + c.mode.slice(1)],
+    ['AI Difficulty', c.aiDifficulty.charAt(0).toUpperCase() + c.aiDifficulty.slice(1)],
+    ['Card Bonus',    c.cardBonus],
+    ['Placement',     c.placement === 'step' ? 'One-by-one' : 'Batch'],
+    ['Fog of War',    c.fogOfWar ? 'On' : 'Off'],
+    ['Dice',          c.dice],
+    ['Turn Timer',    c.turnTimer ? `${c.turnTimer}s` : 'Off'],
   ];
   return (
     <div>
