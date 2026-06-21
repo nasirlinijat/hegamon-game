@@ -65,8 +65,8 @@ export function SetupScreen({ onStart }: Props) {
       <div style={{ position:'absolute', inset:0, zIndex:20, display:'flex', alignItems:'flex-start', justifyContent:'center', background:'radial-gradient(ellipse at 50% 28%, #0D1829 0%, #060C14 100%)', overflow:'auto', padding:'24px 20px' }}>
         <div className="setup-columns" style={{ display:'flex', gap:20, width:'100%', maxWidth:980, alignItems:'flex-start' }}>
 
-          {/* LEFT — identity + commanders + players (stays fixed while the right panel scrolls) */}
-          <div className="setup-left-panel" style={{ ...panel, width:390, flexShrink:0, position:'sticky', top:24, alignSelf:'flex-start' }}>
+          {/* LEFT — identity + commanders + players */}
+          <div className="setup-left-panel" style={{ ...panel, width:390, flexShrink:0 }}>
             {/* Header */}
             <div style={{ position:'relative', textAlign:'center', paddingBottom:26, marginBottom:22 }}>
               <CompassRose />
