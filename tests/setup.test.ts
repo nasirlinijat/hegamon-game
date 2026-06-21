@@ -20,9 +20,13 @@ function setupTotalLeft(s: GameState): number {
   return Object.values(s.setupRemaining).reduce((a, b) => a + b, 0);
 }
 
+// The default config now auto-deploys armies (skips the setup phase). These tests exercise the
+// manual setup-phase mechanics, so they opt into manual + step placement explicitly.
+const MANUAL: GameConfig = { ...DEFAULT_CONFIG, setupMode: 'manual', placement: 'step' };
+
 describe('setup — initial deal', () => {
   it('enters the setup phase with 1 army on every territory', () => {
-    const s = createInitialState(['You', 'CPU 1', 'CPU 2'], { setup: true });
+    const s = createInitialState(['You', 'CPU 1', 'CPU 2'], { setup: true, config: MANUAL });
     expect(s.phase).toBe('setup');
     expect(ALL_TERRITORY_IDS.every((id) => s.armies[id] === 1)).toBe(true);
     expect(totalArmies(s)).toBe(42);
@@ -31,7 +35,7 @@ describe('setup — initial deal', () => {
   it('gives each player STARTING_ARMIES[N] − (territories dealt) to place', () => {
     for (const n of [2, 3, 4, 5, 6]) {
       const ids = Array.from({ length: n }, (_, i) => `P${i}`);
-      const s = createInitialState(ids, { setup: true });
+      const s = createInitialState(ids, { setup: true, config: MANUAL });
       for (const pid of ids) {
         const dealt = ALL_TERRITORY_IDS.filter((id) => s.owner[id] === pid).length;
         expect(s.setupRemaining[pid]).toBe(STARTING_ARMIES[n]! - dealt);
@@ -45,7 +49,7 @@ describe('setup — initial deal', () => {
 
   it('throws for an unsupported player count (>6)', () => {
     const ids = Array.from({ length: 7 }, (_, i) => `P${i}`);
-    expect(() => createInitialState(ids, { setup: true })).toThrow();
+    expect(() => createInitialState(ids, { setup: true, config: MANUAL })).toThrow();
   });
 
   it('assigns every territory to exactly one player and keeps counts even', () => {
@@ -76,7 +80,7 @@ describe('setup — initial deal', () => {
 
 describe('setup — placement', () => {
   it('places one army and passes to the next player', () => {
-    const s = createInitialState(['A', 'B'], { setup: true });
+    const s = createInitialState(['A', 'B'], { setup: true, config: MANUAL });
     const myTerr = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'A')!;
     const before = s.armies[myTerr]!;
     const beforeRemaining = s.setupRemaining['A']!;
@@ -89,26 +93,26 @@ describe('setup — placement', () => {
   });
 
   it('rejects placing on a territory you do not own', () => {
-    const s = createInitialState(['A', 'B'], { setup: true });
+    const s = createInitialState(['A', 'B'], { setup: true, config: MANUAL });
     const enemy = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'B')!;
     expect(() => reduce(s, { type: 'REINFORCE', territory: enemy, count: 1 })).toThrow();
   });
 
   it('rejects placing more armies than remain in the pool', () => {
-    const s = createInitialState(['A', 'B'], { setup: true });
+    const s = createInitialState(['A', 'B'], { setup: true, config: MANUAL });
     const myTerr = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'A')!;
     const tooMany = s.setupRemaining['A']! + 1;
     expect(() => reduce(s, { type: 'REINFORCE', territory: myTerr, count: tooMany })).toThrow();
   });
 
   it('only allows REINFORCE during setup', () => {
-    const s = createInitialState(['A', 'B'], { setup: true });
+    const s = createInitialState(['A', 'B'], { setup: true, config: MANUAL });
     expect(() => reduce(s, { type: 'END_PHASE' })).toThrow();
     expect(() => reduce(s, { type: 'FORTIFY', from: 'alaska', to: 'alberta', count: 1 })).toThrow();
   });
 
   describe('batch placement', () => {
-    const BATCH: GameConfig = { ...DEFAULT_CONFIG, placement: 'batch' };
+    const BATCH: GameConfig = { ...DEFAULT_CONFIG, setupMode: 'manual', placement: 'batch' };
 
     it('keeps the current player placing until their pool is empty, then passes', () => {
       const s = createInitialState(['A', 'B'], { setup: true, config: BATCH, rng: () => 0 });
@@ -128,7 +132,7 @@ describe('setup — placement', () => {
     });
 
     it('step placement still passes after a single army (regression)', () => {
-      const s = createInitialState(['A', 'B'], { setup: true }); // default = step
+      const s = createInitialState(['A', 'B'], { setup: true, config: MANUAL }); // default = step
       const aTerr = ALL_TERRITORY_IDS.find((id) => s.owner[id] === 'A')!;
       const next = reduce(s, { type: 'REINFORCE', territory: aTerr, count: 1 });
       expect(next.players[next.turnPointer]!.id).toBe('B');
@@ -138,7 +142,7 @@ describe('setup — placement', () => {
 
 describe('setup — completion', () => {
   it('transitions to the first player\'s reinforce phase once all armies are placed', () => {
-    let s = createInitialState(['A', 'B'], { setup: true });
+    let s = createInitialState(['A', 'B'], { setup: true, config: MANUAL });
 
     // Drive placement greedily: each player drops onto their first owned territory.
     let guard = 0;
@@ -160,7 +164,7 @@ describe('setup — completion', () => {
   });
 
   it('total board armies only ever grow by placements during setup', () => {
-    let s = createInitialState(['A', 'B', 'C'], { setup: true });
+    let s = createInitialState(['A', 'B', 'C'], { setup: true, config: MANUAL });
     let prev = totalArmies(s);
     let guard = 0;
     while (s.phase === 'setup' && guard++ < 300) {
@@ -179,7 +183,7 @@ describe('setup — completion', () => {
 
 describe('setup — AI placement', () => {
   it('the AI drives a full setup to completion without illegal moves', () => {
-    let s = createInitialState(['A', 'B', 'C', 'D'], { setup: true });
+    let s = createInitialState(['A', 'B', 'C', 'D'], { setup: true, config: MANUAL });
     const rng = () => 0.5;
     let guard = 0;
     while (s.phase === 'setup' && guard++ < 500) {

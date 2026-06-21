@@ -779,12 +779,12 @@ describe('twoplayer neutral', () => {
   });
 
   it('Neutral has 0 setupRemaining', () => {
-    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, setup: true, rng: () => 0.5 });
+    const state = createInitialState(['P1', 'P2'], { config: { ...TWO_CONFIG, setupMode: 'manual' }, setup: true, rng: () => 0.5 });
     expect(state.setupRemaining[NEUTRAL_ID]).toBe(0);
   });
 
   it('real players have 26 armies to place in setup (40 - 14 dealt)', () => {
-    const state = createInitialState(['P1', 'P2'], { config: TWO_CONFIG, setup: true, rng: () => 0.5 });
+    const state = createInitialState(['P1', 'P2'], { config: { ...TWO_CONFIG, setupMode: 'manual' }, setup: true, rng: () => 0.5 });
     expect(state.setupRemaining['P1']).toBe(26);
     expect(state.setupRemaining['P2']).toBe(26);
   });
