@@ -20,7 +20,7 @@ export const CONTINENT_TINT: Record<ContinentId, string> = {
   EEU: '#4fa6b0', // teal
   ME: '#c56b9e',  // magenta
   OC: '#9469b8',  // purple
-  // Risk Europe board — 18 distinct hues echoing the source map's colours.
+  // Imperial Europe board — 18 distinct hues echoing the source map's colours.
   gb:  '#d98a3d', // orange
   fr:  '#9ccb6b', // light green
   sp:  '#c8a93a', // gold

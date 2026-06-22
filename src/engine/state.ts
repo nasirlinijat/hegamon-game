@@ -12,7 +12,7 @@ export const NEUTRAL_ID: PlayerId = 'Neutral';
 /** Pseudo-player ID used in Zombies mode. Spreads each round; never takes a real turn. */
 export const ZOMBIE_ID: PlayerId = 'Zombies';
 
-/** Starting armies by player count (standard Risk; 2-player uses 40 each, no neutral). */
+/** Starting armies per player count (2-player uses 40 each, no neutral). */
 export const STARTING_ARMIES: Record<number, number> = {
   2: 40,
   3: 35,

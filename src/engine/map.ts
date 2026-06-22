@@ -173,7 +173,7 @@ export const TERRITORIES: Record<ClassicTerritoryId, Territory> = (() => {
   return table;
 })();
 
-// --- Adjacency (full standard Risk board; intended to be symmetric) ---
+// --- Adjacency (intended to be symmetric) ---
 
 export const ADJACENCY: Record<ClassicTerritoryId, readonly ClassicTerritoryId[]> = {
   // North America

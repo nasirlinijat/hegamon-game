@@ -4,8 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What we're building
 
-A playable digital Risk clone, single human vs AI opponents, with two selectable boards (chosen on
-the setup screen): the classic world (42 territories / 6 continents) and the imperial world (79 / 8).
+Hegemon — a turn-based global conquest game, single human vs AI opponents, with multiple selectable
+boards (chosen on the setup screen). Classic and Imperial world boards plus several imaginary maps.
 See `ADDING_A_MAP.md` for how a board is defined and rendered.
 
 ## Commands

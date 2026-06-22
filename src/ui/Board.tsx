@@ -525,7 +525,7 @@ export const Board = memo(function Board({
           })}
 
           {/* Flat army tokens — solid owner-coloured disc, thin white ring, crisp number (modern
-              Risk look). Hidden while the continent-colour view is on. */}
+              Classic look). Hidden while the continent-colour view is on. */}
           {!showBonusContinents && ALL_IDS.map((id) => {
             const { x, y } = TERRITORY_CENTROID[id] ?? { x: 0, y: 0 };
             const owner = state.owner[id];

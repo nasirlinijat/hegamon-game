@@ -44,7 +44,7 @@ export function MainMenu({ onSinglePlayer, onMultiplayer }: Props) {
             fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1,
             textShadow: '0 0 50px rgba(196,146,42,0.18)', marginBottom: 10,
           }}>
-            RISK
+            HEGEMON
           </div>
           <div style={{ fontSize: 11, color: C.textDim, marginBottom: 48, letterSpacing: 0.5 }}>
             Command your forces. Conquer the world.

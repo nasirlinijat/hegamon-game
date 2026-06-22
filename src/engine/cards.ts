@@ -55,7 +55,7 @@ export function isValidSet(cards: readonly [Card, Card, Card]): boolean {
 
 // --- Trade-in value ---
 //
-// Two real RISK: Global Domination card modes:
+// Two common card bonus modes:
 //   • Progressive — escalating per global trade-in: 4,6,8,10,12,15, then +5 each (20,25,30…).
 //   • Fixed — value depends on the SET COMPOSITION, never escalates: all-infantry 4, all-cavalry 6,
 //     all-artillery 8, one-of-each 10 (max). A wild completes the best set.
@@ -140,7 +140,7 @@ export function applyTradeIn(
   const newCards = [...player.cards];
   for (const idx of sortedDesc) newCards.splice(idx, 1);
 
-  // Territory-match bonus: +2 armies, ONCE per trade (standard Risk caps it at 2 even if
+  // Territory-match bonus: +2 armies, ONCE per trade (capped at 2 even if
   // several traded cards match), placed on the first matching territory the player owns.
   const newArmies = { ...state.armies } as Record<string, number>;
   const matchCard = tradedCards.find(

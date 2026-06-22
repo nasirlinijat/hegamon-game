@@ -71,7 +71,7 @@ export const MAP_OPTIONS: { id: MapId; name: string; blurb: string }[] = [
   },
   {
     id: 'europe',
-    name: 'Risk Europe',
+    name: 'Imperial Europe',
     blurb: 'The grand campaign — 177 historical provinces across 18 realms, from Iceland to Arabia.',
   },
   {
