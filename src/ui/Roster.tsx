@@ -123,7 +123,7 @@ export const Roster = memo(function Roster({ state, turnSeconds }: Props) {
   );
 });
 
-function StatDial({ label, value, color, prominent }: {
+export function StatDial({ label, value, color, prominent }: {
   label: string; value: number; color: string; prominent?: boolean;
 }) {
   return (

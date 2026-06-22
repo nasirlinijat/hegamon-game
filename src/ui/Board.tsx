@@ -6,6 +6,7 @@ import { darken, lighten } from './colors';
 import { MAP_W, MAP_H } from './map-geometry';
 import { getMapRender } from './map-render';
 import { CONTINENT_TINT } from './territory-shapes';
+import { useViewport } from './useViewport';
 
 interface Props {
   state: GameState;
@@ -82,12 +83,19 @@ export const Board = memo(function Board({
   // are obvious at a glance (fully opaque, exact legend colours).
   const continentOverlay = showBonusContinents ? Object.values(state.map.continents) : [];
 
+  const { isMobile } = useViewport();
+
   // ── Pan / zoom state ─────────────────────────────────────────────────────
   const [vp, setVp] = useState({ x: 0, y: TOP_PAD, scale: 1 });
   const [dragging, setDragging] = useState(false);
   const svgRef   = useRef<SVGSVGElement>(null);
   const dragRef  = useRef<{ mx: number; my: number; tx: number; ty: number } | null>(null);
   const didMoveRef = useRef(false);
+  // Pointer tracking for pinch zoom (touch)
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const lastPinchDistRef = useRef<number | null>(null);
+  const vpRef = useRef(vp);
+  vpRef.current = vp;
 
   // Non-passive wheel listener — required so e.preventDefault() actually works.
   useEffect(() => {
@@ -138,30 +146,81 @@ export const Board = memo(function Board({
         style={{
           width: '100%', height: '100%', display: 'block',
           cursor: dragging ? 'grabbing' : 'grab',
+          touchAction: 'none',
         }}
-        onMouseDown={e => {
-          if (e.button !== 0) return;
-          didMoveRef.current = false;
-          dragRef.current = { mx: e.clientX, my: e.clientY, tx: vp.x, ty: vp.y };
-          setDragging(true);
+        onPointerDown={e => {
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+          if (pointersRef.current.size === 1) {
+            didMoveRef.current = false;
+            dragRef.current = { mx: e.clientX, my: e.clientY, tx: vpRef.current.x, ty: vpRef.current.y };
+            setDragging(true);
+          } else if (pointersRef.current.size === 2) {
+            // Second finger: switch from pan to pinch
+            dragRef.current = null;
+            didMoveRef.current = true; // suppress click after pinch
+            lastPinchDistRef.current = null;
+          }
         }}
-        onMouseMove={e => {
-          if (!dragRef.current) return;
-          const { mx, my, tx, ty } = dragRef.current;
-          const dx = e.clientX - mx;
-          const dy = e.clientY - my;
-          if (!didMoveRef.current && Math.abs(dx) + Math.abs(dy) > 4)
+        onPointerMove={e => {
+          if (!pointersRef.current.has(e.pointerId)) return;
+          pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          const pts = [...pointersRef.current.values()];
+          if (pointersRef.current.size >= 2) {
+            const [a, b] = pts as [{ x: number; y: number }, { x: number; y: number }];
+            const dist = Math.hypot(b.x - a.x, b.y - a.y);
+            if (lastPinchDistRef.current !== null && dist > 0) {
+              const factor = dist / lastPinchDistRef.current;
+              const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+              const midX = ((a.x + b.x) / 2 - rect.left) / rect.width  * MAP_W;
+              const midY = ((a.y + b.y) / 2 - rect.top)  / rect.height * MAP_H;
+              setVp(prev => {
+                const s = Math.max(1, Math.min(8, prev.scale * factor));
+                const r = s / prev.scale;
+                return {
+                  scale: s,
+                  x: clampX(midX - (midX - prev.x) * r, s),
+                  y: clampY(midY - (midY - prev.y) * r, s),
+                };
+              });
+            }
+            lastPinchDistRef.current = dist;
+          } else if (pointersRef.current.size === 1 && dragRef.current) {
+            const { mx, my, tx, ty } = dragRef.current;
+            const dx = e.clientX - mx;
+            const dy = e.clientY - my;
+            if (!didMoveRef.current && Math.abs(dx) + Math.abs(dy) > 4)
+              didMoveRef.current = true;
+            if (!didMoveRef.current) return;
+            const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
+            setVp(prev => ({
+              ...prev,
+              x: clampX(tx + dx / rect.width  * MAP_W, prev.scale),
+              y: clampY(ty + dy / rect.height * MAP_H, prev.scale),
+            }));
+          }
+        }}
+        onPointerUp={e => {
+          pointersRef.current.delete(e.pointerId);
+          if (pointersRef.current.size < 2) lastPinchDistRef.current = null;
+          if (pointersRef.current.size === 1) {
+            // Lifted one pinch finger: re-anchor remaining finger for pan
+            const remaining = [...pointersRef.current.values()][0];
+            if (remaining) dragRef.current = { mx: remaining.x, my: remaining.y, tx: vpRef.current.x, ty: vpRef.current.y };
             didMoveRef.current = true;
-          if (!didMoveRef.current) return;
-          const rect = e.currentTarget.getBoundingClientRect();
-          setVp(prev => ({
-            ...prev,
-            x: clampX(tx + dx / rect.width  * MAP_W, prev.scale),
-            y: clampY(ty + dy / rect.height * MAP_H, prev.scale),
-          }));
+          } else if (pointersRef.current.size === 0) {
+            dragRef.current = null;
+            setDragging(false);
+          }
         }}
-        onMouseUp={() => { dragRef.current = null; setDragging(false); }}
-        onMouseLeave={() => { dragRef.current = null; setDragging(false); }}
+        onPointerCancel={e => {
+          pointersRef.current.delete(e.pointerId);
+          lastPinchDistRef.current = null;
+          if (pointersRef.current.size === 0) {
+            dragRef.current = null;
+            setDragging(false);
+          }
+        }}
       >
         <defs>
           {/* Ocean gradient — deep blue for contrast against the vibrant continents */}
@@ -589,19 +648,21 @@ export const Board = memo(function Board({
       {isOffset && (
         <button
           onClick={() => setVp({ x: 0, y: TOP_PAD, scale: 1 })}
-          title="Reset map view (double-click)"
+          title="Reset map view"
           style={{
             position: 'absolute',
-            top: 14, left: '50%', transform: 'translateX(-50%)',
+            top: isMobile ? 'calc(env(safe-area-inset-top, 0px) + 58px)' : 14,
+            left: '50%', transform: 'translateX(-50%)',
             background: 'rgba(8,16,32,0.90)',
             color: '#8a9ab0',
             border: '1px solid rgba(255,255,255,0.14)',
             borderRadius: 8,
-            padding: '6px 14px',
-            fontSize: 11, fontWeight: 600,
+            padding: isMobile ? '10px 20px' : '6px 14px',
+            fontSize: isMobile ? 13 : 11, fontWeight: 600,
             cursor: 'pointer',
             zIndex: 5,
             letterSpacing: 0.3,
+            minHeight: isMobile ? 44 : undefined,
           }}
         >⌖ Reset View</button>
       )}

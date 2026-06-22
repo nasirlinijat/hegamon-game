@@ -51,7 +51,7 @@ function computeOutcomes(att: readonly number[], def: readonly number[]) {
 
 const ROLL_MS = 560;
 
-export const DicePanel = memo(function DicePanel({ result, seq }: { result: CombatResult | null; seq: number }) {
+export const DicePanel = memo(function DicePanel({ result, seq, style: styleProp }: { result: CombatResult | null; seq: number; style?: React.CSSProperties }) {
   const [rolling, setRolling] = useState(false);
   const [faces, setFaces]     = useState<{ att: number[]; def: number[] }>({ att: [], def: [] });
 
@@ -78,6 +78,7 @@ export const DicePanel = memo(function DicePanel({ result, seq }: { result: Comb
   return (
     <div style={{
       ...panelStyle,
+      ...styleProp,
       borderColor: !rolling && result.captured
         ? 'rgba(196,146,42,0.4)'
         : 'rgba(255,255,255,0.09)',

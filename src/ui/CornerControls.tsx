@@ -198,7 +198,7 @@ function CornerBtn({ label, active, highlight, onClick }: {
   );
 }
 
-function ReinforceBreakdown({ state }: { state: GameState }) {
+export function ReinforceBreakdown({ state }: { state: GameState }) {
   const { myId } = usePlayer();
   const terrCount = Object.values(state.owner).filter((o) => o === myId).length;
   const base      = Math.max(3, Math.floor(terrCount / 3));
@@ -234,7 +234,7 @@ const CARD_META: Record<CardType, { name: string; color: string }> = {
   wild:      { name: 'WILD',      color: '#a575d0' },
 };
 
-function CardFace({ card, selected, onClick, territoryName }: {
+export function CardFace({ card, selected, onClick, territoryName }: {
   card: Card; selected: boolean; onClick: () => void; territoryName: string;
 }) {
   const meta = CARD_META[card.type];

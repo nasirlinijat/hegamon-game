@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TerritoryId, GameMap } from '../engine/map';
+import { useViewport } from './useViewport';
 
 type Kind = 'fortify' | 'capture' | 'blitz' | 'place';
 
@@ -38,11 +39,15 @@ export function ArmyMoveDial({ kind, from, to, min, max, color, map, onConfirm, 
   const draggingRef = useRef(false);
   const movedRef = useRef(false);
 
+  const { width: vpWidth } = useViewport();
+  // On narrow screens reduce track width so the modal fits without overflow
+  const trackW = Math.min(TRACK_W, vpWidth - 80);
+
   const clamp = (n: number) => Math.max(min, Math.min(max, n));
   useEffect(() => { setCount(clamp(max)); /* reset on new move */ }, [from, to, min, max]);
 
   const frac = max > min ? (count - min) / (max - min) : 0;
-  const cx = R + frac * (TRACK_W - 2 * R);            // circle centre x within the track
+  const cx = R + frac * (trackW - 2 * R);            // circle centre x within the track
   // For moves: armies left in the source (max+1−count). For placement: armies still unplaced (max−count).
   const remainder = kind === 'place' ? max - count : max + 1 - count;
 
@@ -50,7 +55,7 @@ export function ArmyMoveDial({ kind, from, to, min, max, color, map, onConfirm, 
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return count;
     const x = clientX - rect.left;
-    const f = (x - R) / (TRACK_W - 2 * R);
+    const f = (x - R) / (trackW - 2 * R);
     return clamp(Math.round(min + f * (max - min)));
   }
 
@@ -116,7 +121,7 @@ export function ArmyMoveDial({ kind, from, to, min, max, color, map, onConfirm, 
         {/* Track with the draggable coin */}
         <div
           ref={trackRef}
-          style={{ position: 'relative', width: TRACK_W, height: R * 2 + 8, touchAction: 'none' }}
+          style={{ position: 'relative', width: trackW, height: R * 2 + 8, touchAction: 'none' }}
         >
           {/* Track line */}
           <div style={{
@@ -132,7 +137,7 @@ export function ArmyMoveDial({ kind, from, to, min, max, color, map, onConfirm, 
           }} />
           {/* Min / max ticks */}
           <Tick x={R} label={`${min}`} />
-          <Tick x={TRACK_W - R} label={`${max}`} />
+          <Tick x={trackW - R} label={`${max}`} />
 
           {/* The coin */}
           <div

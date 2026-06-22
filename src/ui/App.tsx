@@ -29,7 +29,9 @@ import { SetupScreen } from './SetupScreen';
 import { ArmyMoveDial } from './ArmyMoveDial';
 import { MainMenu } from './MainMenu';
 import { LobbyScreen } from './LobbyScreen';
+import { MobileHud } from './MobileHud';
 import { PlayerContext, DEFAULT_PLAYER_CTX, buildPlayerCtx } from './PlayerContext';
+import { useViewport } from './useViewport';
 import * as net from './net';
 
 // ---------------------------------------------------------------------------
@@ -125,6 +127,7 @@ function rehydrate(wire: object, config: GameConfig): GameState {
 type Screen = 'menu' | 'setup' | 'lobby' | 'game';
 
 export function App() {
+  const { isMobile } = useViewport();
   const [screen, setScreen] = useState<Screen>('menu');
   const [isOnline, setIsOnline] = useState(false);
   const [playerCtx, setPlayerCtx] = useState(DEFAULT_PLAYER_CTX);
@@ -586,28 +589,60 @@ export function App() {
           showBonusContinents={showContinents}
         />
 
-        <DicePanel result={lastCombat} seq={combatSeq} />
-        <Roster state={state} turnSeconds={turnElapsed} />
-        <PhaseHud
-          state={state}
-          isHumanTurn={isMyTurn}
-          aiRunning={aiRunning}
-          selected={selected}
-          onEndPhase={onEndPhase}
-          blitzMode={blitzMode}
-          onToggleBlitz={() => setBlitzMode((b) => !b)}
-          secondsLeft={secondsLeft}
-        />
-        <CornerControls
-          state={state}
-          isHumanTurn={isMyTurn}
-          selectedCards={selectedCards}
-          onToggleCard={onToggleCard}
-          onTradeSelected={onTradeSelected}
-          onRestart={onRestart}
-          continentsShown={showContinents}
-          onToggleContinents={() => setShowContinents((v) => !v)}
-        />
+        {isMobile ? (
+          <>
+            <DicePanel
+              result={lastCombat} seq={combatSeq}
+              style={{
+                top: 'calc(env(safe-area-inset-top, 0px) + 62px)',
+                left: '50%', transform: 'translateX(-50%)',
+                right: 'unset',
+              }}
+            />
+            <MobileHud
+              state={state}
+              isHumanTurn={isMyTurn}
+              aiRunning={aiRunning}
+              selected={selected}
+              onEndPhase={onEndPhase}
+              blitzMode={blitzMode}
+              onToggleBlitz={() => setBlitzMode((b) => !b)}
+              secondsLeft={secondsLeft}
+              turnSeconds={turnElapsed}
+              selectedCards={selectedCards}
+              onToggleCard={onToggleCard}
+              onTradeSelected={onTradeSelected}
+              onRestart={onRestart}
+              continentsShown={showContinents}
+              onToggleContinents={() => setShowContinents((v) => !v)}
+            />
+          </>
+        ) : (
+          <>
+            <DicePanel result={lastCombat} seq={combatSeq} />
+            <Roster state={state} turnSeconds={turnElapsed} />
+            <PhaseHud
+              state={state}
+              isHumanTurn={isMyTurn}
+              aiRunning={aiRunning}
+              selected={selected}
+              onEndPhase={onEndPhase}
+              blitzMode={blitzMode}
+              onToggleBlitz={() => setBlitzMode((b) => !b)}
+              secondsLeft={secondsLeft}
+            />
+            <CornerControls
+              state={state}
+              isHumanTurn={isMyTurn}
+              selectedCards={selectedCards}
+              onToggleCard={onToggleCard}
+              onTradeSelected={onTradeSelected}
+              onRestart={onRestart}
+              continentsShown={showContinents}
+              onToggleContinents={() => setShowContinents((v) => !v)}
+            />
+          </>
+        )}
 
         {pendingMove && (
           <ArmyMoveDial

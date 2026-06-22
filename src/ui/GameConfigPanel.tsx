@@ -225,7 +225,7 @@ export function GameConfigPanel({ cs, setCs, numPlayers }: GameConfigPanelProps)
     <div style={{ display: 'flex', flexDirection: 'column' }}>
       {/* ── Game Mode ──────────────────────────────────────── */}
       <SectionLabel>Game Mode</SectionLabel>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 6, marginBottom: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(52px, 1fr))', gap: 6, marginBottom: 10 }}>
         {MODES.map(m => (
           <ModeIconTile
             key={m.id} meta={m}

@@ -20,10 +20,11 @@ export function MainMenu({ onSinglePlayer, onMultiplayer }: Props) {
       <div style={{
         background: 'linear-gradient(160deg, #0C1528 0%, #091320 100%)',
         border: '1px solid rgba(196,146,42,0.18)',
-        borderRadius: 18, padding: '52px 64px',
+        borderRadius: 18,
+        padding: 'clamp(28px, 6vw, 52px) clamp(20px, 8vw, 64px)',
         textAlign: 'center',
         boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 32px 80px rgba(0,0,0,0.75)',
-        minWidth: 360,
+        width: 'min(360px, 92vw)',
       }}>
         {/* Compass rose */}
         <svg aria-hidden style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', opacity: 0.06, pointerEvents: 'none' }}
@@ -40,7 +41,7 @@ export function MainMenu({ onSinglePlayer, onMultiplayer }: Props) {
             World Conquest
           </div>
           <div style={{
-            fontSize: 46, fontWeight: 900, letterSpacing: 6, color: C.text,
+            fontSize: 'clamp(30px, 10vw, 46px)', fontWeight: 900, letterSpacing: 'clamp(2px, 1.5vw, 6px)', color: C.text,
             fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1,
             textShadow: '0 0 50px rgba(196,146,42,0.18)', marginBottom: 10,
           }}>

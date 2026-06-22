@@ -59,10 +59,10 @@ export function SetupScreen({ onStart }: Props) {
         .setup-map:not(.map-active):hover      { border-color:rgba(196,146,42,0.4)!important; background:rgba(196,146,42,0.07)!important; }
         .setup-launch:hover  { filter:brightness(1.12)!important; box-shadow:0 0 48px rgba(196,146,42,0.5),0 10px 32px rgba(0,0,0,0.55)!important; }
         .setup-launch:active { filter:brightness(0.94)!important; }
-        @media (max-width:780px) { .setup-columns { flex-direction:column!important; } .setup-left-panel { width:100%!important; flex-shrink:1!important; } }
+        @media (max-width:780px) { .setup-columns { flex-direction:column!important; } .setup-left-panel { width:100%!important; flex-shrink:1!important; padding:20px 18px!important; } }
       `}</style>
 
-      <div style={{ position:'absolute', inset:0, zIndex:20, display:'flex', alignItems:'flex-start', justifyContent:'center', background:'radial-gradient(ellipse at 50% 28%, #0D1829 0%, #060C14 100%)', overflow:'auto', padding:'24px 20px' }}>
+      <div style={{ position:'absolute', inset:0, zIndex:20, display:'flex', alignItems:'flex-start', justifyContent:'center', background:'radial-gradient(ellipse at 50% 28%, #0D1829 0%, #060C14 100%)', overflow:'auto', padding:'max(24px, env(safe-area-inset-top, 24px)) max(20px, env(safe-area-inset-right, 20px)) max(24px, env(safe-area-inset-bottom, 24px)) max(20px, env(safe-area-inset-left, 20px))' }}>
         <div className="setup-columns" style={{ display:'flex', gap:20, width:'100%', maxWidth:980, alignItems:'flex-start' }}>
 
           {/* LEFT — identity + commanders + players */}
@@ -72,7 +72,7 @@ export function SetupScreen({ onStart }: Props) {
               <CompassRose />
               <div style={{ position:'relative', zIndex:1 }}>
                 <div style={{ fontSize:9, letterSpacing:5, color:CC.gold, fontWeight:700, textTransform:'uppercase', marginBottom:9 }}>World Conquest</div>
-                <div style={{ fontSize:42, fontWeight:900, letterSpacing:6, color:CC.text, fontFamily:"Georgia,'Times New Roman',serif", lineHeight:1, textShadow:'0 0 50px rgba(196,146,42,0.18)' }}>HEGEMON</div>
+                <div style={{ fontSize:'clamp(28px,8vw,42px)', fontWeight:900, letterSpacing:'clamp(2px,1.5vw,6px)', color:CC.text, fontFamily:"Georgia,'Times New Roman',serif", lineHeight:1, textShadow:'0 0 50px rgba(196,146,42,0.18)' }}>HEGEMON</div>
                 <div style={{ fontSize:11, color:CC.textDim, marginTop:10, letterSpacing:0.4 }}>Command your forces. Conquer the world.</div>
               </div>
               <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)', width:200, height:1, background:'linear-gradient(90deg,transparent,rgba(196,146,42,0.42) 30%,rgba(196,146,42,0.42) 70%,transparent)' }} />

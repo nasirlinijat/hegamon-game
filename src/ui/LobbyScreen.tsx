@@ -141,7 +141,7 @@ export function LobbyScreen({ onGameReady, onBack }: Props) {
         <div style={{ width:1, background:'rgba(255,255,255,0.07)', alignSelf:'stretch', flexShrink:0 }} />
 
         {/* Right: game config */}
-        <div style={{ flex:1, minWidth:320 }}>
+        <div style={{ flex:1, minWidth:'min(320px, 100%)' }}>
           <GameConfigPanel cs={cs} setCs={setCs} numPlayers={roomSize} />
         </div>
       </div>
@@ -156,7 +156,7 @@ export function LobbyScreen({ onGameReady, onBack }: Props) {
       <div style={{ display:'flex', gap:20, alignItems:'flex-start', flexWrap:'wrap' }}>
 
         {/* Left: room code + seats */}
-        <div style={{ minWidth:200, flex:'0 0 220px' }}>
+        <div style={{ minWidth:'min(200px, 100%)', flex:'0 0 220px' }}>
           {/* Room code */}
           <div style={{
             background:'rgba(196,146,42,0.1)', border:'1px solid rgba(196,146,42,0.25)',
@@ -214,7 +214,7 @@ export function LobbyScreen({ onGameReady, onBack }: Props) {
         <div style={{ width:1, background:'rgba(255,255,255,0.07)', alignSelf:'stretch', flexShrink:0 }} />
 
         {/* Right: game config (host editable, others read-only) */}
-        <div style={{ flex:1, minWidth:320 }}>
+        <div style={{ flex:1, minWidth:'min(320px, 100%)' }}>
           {isHost ? (
             <GameConfigPanel cs={cs} setCs={setCs} numPlayers={numPlayers} />
           ) : (
@@ -261,15 +261,16 @@ function Screen({ children, title, onBack, wide }: { children: React.ReactNode; 
   return (
     <div style={{
       position:'absolute', inset:0, zIndex:20,
-      display:'flex', alignItems:'center', justifyContent:'center',
+      display:'flex', alignItems:'flex-start', justifyContent:'center',
       background:'radial-gradient(ellipse at 50% 28%, #0D1829 0%, #060C14 100%)',
-      overflow:'auto', padding:'24px 16px',
+      overflow:'auto',
+      padding:'max(24px, env(safe-area-inset-top, 24px)) max(16px, env(safe-area-inset-right, 16px)) max(24px, env(safe-area-inset-bottom, 24px)) max(16px, env(safe-area-inset-left, 16px))',
     }}>
       <div style={{
         background:'linear-gradient(160deg, #0C1528 0%, #091320 100%)',
         border:'1px solid rgba(196,146,42,0.16)',
-        borderRadius:16, padding:'32px 36px',
-        width: wide ? 860 : 460, maxWidth:'100%',
+        borderRadius:16, padding:'clamp(20px,4vw,32px) clamp(16px,4vw,36px)',
+        width: wide ? 'min(860px, 100%)' : 'min(460px, 100%)',
         boxShadow:'0 0 0 1px rgba(255,255,255,0.04), 0 28px 70px rgba(0,0,0,0.72)',
       }}>
         <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:24 }}>
