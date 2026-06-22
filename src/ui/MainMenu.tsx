@@ -40,7 +40,7 @@ export function MainMenu({ onSinglePlayer, onMultiplayer }: Props) {
             World Conquest
           </div>
           <div style={{
-            fontSize: 62, fontWeight: 900, letterSpacing: 14, color: C.text,
+            fontSize: 46, fontWeight: 900, letterSpacing: 6, color: C.text,
             fontFamily: "Georgia, 'Times New Roman', serif", lineHeight: 1,
             textShadow: '0 0 50px rgba(196,146,42,0.18)', marginBottom: 10,
           }}>

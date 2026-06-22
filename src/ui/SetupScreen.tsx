@@ -72,7 +72,7 @@ export function SetupScreen({ onStart }: Props) {
               <CompassRose />
               <div style={{ position:'relative', zIndex:1 }}>
                 <div style={{ fontSize:9, letterSpacing:5, color:CC.gold, fontWeight:700, textTransform:'uppercase', marginBottom:9 }}>World Conquest</div>
-                <div style={{ fontSize:58, fontWeight:900, letterSpacing:12, color:CC.text, fontFamily:"Georgia,'Times New Roman',serif", lineHeight:1, textShadow:'0 0 50px rgba(196,146,42,0.18)' }}>HEGEMON</div>
+                <div style={{ fontSize:42, fontWeight:900, letterSpacing:6, color:CC.text, fontFamily:"Georgia,'Times New Roman',serif", lineHeight:1, textShadow:'0 0 50px rgba(196,146,42,0.18)' }}>HEGEMON</div>
                 <div style={{ fontSize:11, color:CC.textDim, marginTop:10, letterSpacing:0.4 }}>Command your forces. Conquer the world.</div>
               </div>
               <div style={{ position:'absolute', bottom:0, left:'50%', transform:'translateX(-50%)', width:200, height:1, background:'linear-gradient(90deg,transparent,rgba(196,146,42,0.42) 30%,rgba(196,146,42,0.42) 70%,transparent)' }} />
