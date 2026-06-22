@@ -59,7 +59,7 @@ export function SetupScreen({ onStart }: Props) {
         .setup-map:not(.map-active):hover      { border-color:rgba(196,146,42,0.4)!important; background:rgba(196,146,42,0.07)!important; }
         .setup-launch:hover  { filter:brightness(1.12)!important; box-shadow:0 0 48px rgba(196,146,42,0.5),0 10px 32px rgba(0,0,0,0.55)!important; }
         .setup-launch:active { filter:brightness(0.94)!important; }
-        @media (max-width:780px) { .setup-columns { flex-direction:column!important; } .setup-left-panel { width:100%!important; flex-shrink:1!important; padding:20px 18px!important; } }
+        @media (max-width:780px) { .setup-columns { flex-direction:column!important; align-items:stretch!important; } .setup-left-panel { width:100%!important; flex-shrink:1!important; padding:20px 18px!important; } .setup-right-panel { min-width:0!important; } }
       `}</style>
 
       <div style={{ position:'absolute', inset:0, zIndex:20, display:'flex', alignItems:'flex-start', justifyContent:'center', background:'radial-gradient(ellipse at 50% 28%, #0D1829 0%, #060C14 100%)', overflow:'auto', padding:'max(24px, env(safe-area-inset-top, 24px)) max(20px, env(safe-area-inset-right, 20px)) max(24px, env(safe-area-inset-bottom, 24px)) max(20px, env(safe-area-inset-left, 20px))' }}>
@@ -114,7 +114,7 @@ export function SetupScreen({ onStart }: Props) {
           </div>
 
           {/* RIGHT — config panel + launch */}
-          <div style={{ ...panel, flex:1, minWidth:340, display:'flex', flexDirection:'column' }}>
+          <div className="setup-right-panel" style={{ ...panel, flex:1, minWidth:340, display:'flex', flexDirection:'column' }}>
             <GameConfigPanel cs={cs} setCs={setCs} numPlayers={total} />
 
             <Divider mt={18} mb={18} />
