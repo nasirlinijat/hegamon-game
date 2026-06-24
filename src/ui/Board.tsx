@@ -150,16 +150,23 @@ export const Board = memo(function Board({
         }}
         onPointerDown={e => {
           pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-          (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId);
+          // NB: capture is deliberately NOT taken here. With a mouse, capturing the pointer on
+          // pointerdown retargets the follow-up `click` event to this <svg> instead of the <path>
+          // under the cursor, so territory clicks never fire. We defer capture to the first real
+          // drag move (below); a stationary click then reaches the path's onClick normally.
           if (pointersRef.current.size === 1) {
             didMoveRef.current = false;
             dragRef.current = { mx: e.clientX, my: e.clientY, tx: vpRef.current.x, ty: vpRef.current.y };
             setDragging(true);
           } else if (pointersRef.current.size === 2) {
-            // Second finger: switch from pan to pinch
+            // Second finger: switch from pan to pinch. Pinch never produces a click, so capture
+            // both pointers now to keep tracking if a finger drifts off the element.
             dragRef.current = null;
             didMoveRef.current = true; // suppress click after pinch
             lastPinchDistRef.current = null;
+            for (const id of pointersRef.current.keys()) {
+              try { (e.currentTarget as SVGSVGElement).setPointerCapture(id); } catch { /* ignore */ }
+            }
           }
         }}
         onPointerMove={e => {
@@ -189,8 +196,12 @@ export const Board = memo(function Board({
             const { mx, my, tx, ty } = dragRef.current;
             const dx = e.clientX - mx;
             const dy = e.clientY - my;
-            if (!didMoveRef.current && Math.abs(dx) + Math.abs(dy) > 4)
+            if (!didMoveRef.current && Math.abs(dx) + Math.abs(dy) > 4) {
               didMoveRef.current = true;
+              // A real drag has begun — now capture so panning keeps tracking even if the
+              // pointer leaves the element. (Deferred from pointerdown to preserve clicks.)
+              try { (e.currentTarget as SVGSVGElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+            }
             if (!didMoveRef.current) return;
             const rect = (e.currentTarget as SVGSVGElement).getBoundingClientRect();
             setVp(prev => ({
