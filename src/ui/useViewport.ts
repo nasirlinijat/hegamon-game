@@ -5,13 +5,7 @@ interface Viewport { width: number; height: number; isMobile: boolean; isPortrai
 function measure(): Viewport {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  // A touch device (phone/tablet) reports a coarse primary pointer; a desktop reports fine.
-  // Only the short-dimension test (which catches phones held in landscape) is gated on touch,
-  // so a wide-but-short desktop window keeps the desktop layout instead of falling back to mobile.
-  const coarse = typeof window.matchMedia === 'function'
-    && window.matchMedia('(pointer: coarse)').matches;
-  const isMobile = w <= 760 || (coarse && Math.min(w, h) <= 760);
-  return { width: w, height: h, isMobile, isPortrait: h > w };
+  return { width: w, height: h, isMobile: Math.min(w, h) <= 760, isPortrait: h > w };
 }
 
 export function useViewport(): Viewport {
